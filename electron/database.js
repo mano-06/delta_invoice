@@ -6,22 +6,19 @@ let db
 let currentDbPath
 
 const defaultSettings = {
-  companyName: 'EXTREME EMBROIDERIES',
-  address1: '8-68/7 A1, VIGNESHWARA NAGAR,',
-  address2: 'POOLUVAPATTI POST,',
-  city: 'Tiruppur',
-  pincode: '641 602',
-  gstin: '33XXXXXXXXXX',
-  stateName: 'Tamil Nadu',
-  stateCode: '33',
-  email: 'info@example.com',
+  companyName: 'Delta Invoice',
+  address1: '',
+  address2: '',
+  city: '',
+  pincode: '',
+  gstin: '',
+  stateName: '',
+  email: '',
   phone: '',
-  bankName: 'State Bank of India',
-  accountNumber: '1234567890',
-  branchIfsc: 'SBI0001234',
-  invoicePrefix: 'INV',
-  invoiceStart: 160,
-  invoiceFormat: 'INV-{year}-{seq}',
+  bankName: '',
+  accountNumber: '',
+  branchIfsc: '',
+  hsnSac: '',
 }
 
 function getDatabasePath(userDataPath) {
@@ -42,13 +39,27 @@ function getDatabaseInstance() {
 function initializeDatabase(app) {
   const dbPath = getDatabasePath(app.getPath('userData'))
   currentDbPath = dbPath
+  console.log('opening sqlite database at', dbPath)
   db = new Database(dbPath)
-  db.pragma('journal_mode = WAL')
+  console.log('database connection created')
+  console.log('creating tables')
   createTables()
+  console.log('tables created')
+  console.log('ensuring defaults')
   ensureDefaults()
+  console.log('database initialized successfully')
+}
+
+function ensureColumn(tableName, columnName, columnType) {
+  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all()
+  const exists = columns.some((column) => column.name === columnName)
+  if (!exists) {
+    db.prepare(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnType}`).run()
+  }
 }
 
 function createTables() {
+  console.log('creating settings table')
   db.prepare(`CREATE TABLE IF NOT EXISTS settings (
     id INTEGER PRIMARY KEY,
     companyName TEXT,
@@ -68,7 +79,10 @@ function createTables() {
     invoiceStart INTEGER,
     invoiceFormat TEXT
   )`).run()
+  ensureColumn('settings', 'hsnSac', 'TEXT')
+  console.log('settings table ready')
 
+  console.log('creating customers table')
   db.prepare(`CREATE TABLE IF NOT EXISTS customers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT,
@@ -80,7 +94,9 @@ function createTables() {
     email TEXT,
     createdAt TEXT
   )`).run()
+  console.log('customers table ready')
 
+  console.log('creating products table')
   db.prepare(`CREATE TABLE IF NOT EXISTS products (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT,
@@ -90,12 +106,16 @@ function createTables() {
     unit TEXT,
     createdAt TEXT
   )`).run()
+  console.log('products table ready')
 
+  console.log('creating invoice_sequence table')
   db.prepare(`CREATE TABLE IF NOT EXISTS invoice_sequence (
     id INTEGER PRIMARY KEY,
     lastSequence INTEGER
   )`).run()
+  console.log('invoice_sequence table ready')
 
+  console.log('creating invoices table')
   db.prepare(`CREATE TABLE IF NOT EXISTS invoices (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     invoiceNumber TEXT,
@@ -130,7 +150,9 @@ function createTables() {
     createdAt TEXT,
     updatedAt TEXT
   )`).run()
+  console.log('invoices table ready')
 
+  console.log('creating invoice_items table')
   db.prepare(`CREATE TABLE IF NOT EXISTS invoice_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     invoiceId INTEGER,
@@ -144,19 +166,39 @@ function createTables() {
     taxRate REAL,
     FOREIGN KEY (invoiceId) REFERENCES invoices(id) ON DELETE CASCADE
   )`).run()
+  console.log('invoice_items table ready')
 }
 
 function ensureDefaults() {
-  const row = db.prepare('SELECT id FROM settings LIMIT 1').get()
+  const row = db.prepare('SELECT * FROM settings LIMIT 1').get()
+
   if (!row) {
     const stmt = db.prepare(`INSERT INTO settings (
-      companyName, address1, address2, city, pincode, gstin, stateName, stateCode, email, phone, bankName, accountNumber, branchIfsc, invoicePrefix, invoiceStart, invoiceFormat
-    ) VALUES (@companyName, @address1, @address2, @city, @pincode, @gstin, @stateName, @stateCode, @email, @phone, @bankName, @accountNumber, @branchIfsc, @invoicePrefix, @invoiceStart, @invoiceFormat)`) 
+      companyName, address1, address2, city, pincode, gstin, stateName, email, phone, bankName, accountNumber, branchIfsc, hsnSac
+    ) VALUES (@companyName, @address1, @address2, @city, @pincode, @gstin, @stateName, @email, @phone, @bankName, @accountNumber, @branchIfsc, @hsnSac)`)
     stmt.run(defaultSettings)
+  } else {
+    const updates = {}
+
+    if (!row.companyName) updates.companyName = defaultSettings.companyName
+    if (!row.hsnSac) updates.hsnSac = defaultSettings.hsnSac
+
+    if (Object.keys(updates).length > 0) {
+      const stmt = db.prepare(`UPDATE settings SET
+        companyName = @companyName,
+        hsnSac = @hsnSac
+        WHERE id = @id`)
+      stmt.run({
+        companyName: updates.companyName || row.companyName,
+        hsnSac: updates.hsnSac || row.hsnSac,
+        id: row.id,
+      })
+    }
   }
+
   const sequence = db.prepare('SELECT id FROM invoice_sequence LIMIT 1').get()
   if (!sequence) {
-    db.prepare('INSERT INTO invoice_sequence (id, lastSequence) VALUES (1, @sequence)').run({ sequence: defaultSettings.invoiceStart - 1 })
+    db.prepare('INSERT INTO invoice_sequence (id, lastSequence) VALUES (1, @sequence)').run({ sequence: 0 })
   }
 }
 
@@ -164,8 +206,24 @@ function getSettings() {
   return db.prepare('SELECT * FROM settings LIMIT 1').get()
 }
 
-function saveSettings(payload) {
+function saveSettings(payload = {}) {
   const existing = getSettings()
+  const normalized = {
+    companyName: payload.companyName || '',
+    address1: payload.address1 || '',
+    address2: payload.address2 || '',
+    city: payload.city || '',
+    pincode: payload.pincode || '',
+    gstin: payload.gstin || '',
+    stateName: payload.stateName || '',
+    email: payload.email || '',
+    phone: payload.phone || '',
+    bankName: payload.bankName || '',
+    accountNumber: payload.accountNumber || '',
+    branchIfsc: payload.branchIfsc || '',
+    hsnSac: payload.hsnSac || '',
+  }
+
   if (existing) {
     const stmt = db.prepare(`UPDATE settings SET
       companyName=@companyName,
@@ -175,30 +233,34 @@ function saveSettings(payload) {
       pincode=@pincode,
       gstin=@gstin,
       stateName=@stateName,
-      stateCode=@stateCode,
       email=@email,
       phone=@phone,
       bankName=@bankName,
       accountNumber=@accountNumber,
       branchIfsc=@branchIfsc,
-      invoicePrefix=@invoicePrefix,
-      invoiceStart=@invoiceStart,
-      invoiceFormat=@invoiceFormat
-      WHERE id=@id`) 
-    return stmt.run({ ...payload, id: existing.id })
+      hsnSac=@hsnSac,
+      stateCode=''
+      WHERE id=@id`)
+    return stmt.run({ ...normalized, id: existing.id })
   }
+
   const stmt = db.prepare(`INSERT INTO settings (
-    companyName, address1, address2, city, pincode, gstin, stateName, stateCode, email, phone, bankName, accountNumber, branchIfsc, invoicePrefix, invoiceStart, invoiceFormat
-  ) VALUES (@companyName, @address1, @address2, @city, @pincode, @gstin, @stateName, @stateCode, @email, @phone, @bankName, @accountNumber, @branchIfsc, @invoicePrefix, @invoiceStart, @invoiceFormat)`) 
-  return stmt.run(payload)
+    companyName, address1, address2, city, pincode, gstin, stateName, email, phone, bankName, accountNumber, branchIfsc, hsnSac
+  ) VALUES (@companyName, @address1, @address2, @city, @pincode, @gstin, @stateName, @email, @phone, @bankName, @accountNumber, @branchIfsc, @hsnSac)`)
+  return stmt.run(normalized)
 }
 
 function getCustomers() {
   return db.prepare('SELECT * FROM customers ORDER BY id DESC').all()
 }
 
-function saveCustomer(payload) {
-  if (payload.id) {
+function saveCustomer(payload = {}) {
+  const normalized = {
+    ...payload,
+    stateCode: payload.stateCode || '',
+  }
+
+  if (normalized.id) {
     const stmt = db.prepare(`UPDATE customers SET
       name=@name,
       billingAddress=@billingAddress,
@@ -209,12 +271,13 @@ function saveCustomer(payload) {
       email=@email
       WHERE id=@id`
     )
-    return stmt.run(payload)
+    return stmt.run(normalized)
   }
+
   const stmt = db.prepare(`INSERT INTO customers
     (name, billingAddress, gstin, state, stateCode, phone, email, createdAt)
     VALUES (@name, @billingAddress, @gstin, @state, @stateCode, @phone, @email, @createdAt)`)
-  return stmt.run({ ...payload, createdAt: new Date().toISOString() })
+  return stmt.run({ ...normalized, createdAt: new Date().toISOString() })
 }
 
 function deleteCustomer(id) {
@@ -225,8 +288,15 @@ function getProducts() {
   return db.prepare('SELECT * FROM products ORDER BY id DESC').all()
 }
 
-function saveProduct(payload) {
-  if (payload.id) {
+function saveProduct(payload = {}) {
+  const normalized = {
+    ...payload,
+    hsn: '',
+    gstRate: 0,
+    unit: '',
+  }
+
+  if (normalized.id) {
     const stmt = db.prepare(`UPDATE products SET
       name=@name,
       hsn=@hsn,
@@ -235,12 +305,13 @@ function saveProduct(payload) {
       unit=@unit
       WHERE id=@id`
     )
-    return stmt.run(payload)
+    return stmt.run(normalized)
   }
+
   const stmt = db.prepare(`INSERT INTO products
     (name, hsn, rate, gstRate, unit, createdAt)
     VALUES (@name, @hsn, @rate, @gstRate, @unit, @createdAt)`)
-  return stmt.run({ ...payload, createdAt: new Date().toISOString() })
+  return stmt.run({ ...normalized, createdAt: new Date().toISOString() })
 }
 
 function deleteProduct(id) {
@@ -264,29 +335,28 @@ function getInvoiceById(id) {
 }
 
 function getNextInvoiceNumber() {
-  const settings = getSettings()
   const sequence = db.prepare('SELECT lastSequence FROM invoice_sequence WHERE id = 1').get()
-  const nextSequence = sequence?.lastSequence + 1 || settings.invoiceStart
-  const formatted = settings.invoiceFormat
-    .replace('{year}', new Date().getFullYear())
-    .replace('{seq}', String(nextSequence).padStart(3, '0'))
-    .replace('{prefix}', settings.invoicePrefix || 'INV')
-  return { nextSequence, invoiceNumber: formatted }
+  const nextSequence = (sequence?.lastSequence || 0) + 1
+  return {
+    nextSequence,
+    invoiceNumber: `DD/${nextSequence}`,
+  }
 }
 
 function saveInvoice(payload) {
   const now = new Date().toISOString()
   let invoiceId
   const existing = payload.id ? getInvoiceById(payload.id) : null
+  const nextNumber = getNextInvoiceNumber()
 
   const record = {
-    invoiceNumber: payload.invoiceNumber,
+    invoiceNumber: payload.invoiceNumber || nextNumber.invoiceNumber,
     invoiceDate: payload.invoiceDate,
     buyerName: payload.buyerName,
     buyerAddress: payload.buyerAddress,
     buyerGstin: payload.buyerGstin,
     buyerState: payload.buyerState,
-    buyerStateCode: payload.buyerStateCode,
+    buyerStateCode: '',
     deliveryNote: payload.deliveryNote,
     paymentTerms: payload.paymentTerms,
     referenceNo: payload.referenceNo,
@@ -361,17 +431,21 @@ function saveInvoice(payload) {
       @dispatchDocNo, @dispatchDate, @transporter, @destination, @termsOfDelivery,
       @totalQuantity, @taxableValue, @cgstAmount, @sgstAmount, @roundOff, @totalAmount,
       @amountWords, @taxAmountWords, @bankName, @accountNumber, @branchIfsc, @createdAt, @updatedAt
-    )`) 
+    )`)
     const result = stmt.run({ ...record, createdAt: now })
     invoiceId = result.lastInsertRowid
-    db.prepare('UPDATE invoice_sequence SET lastSequence = ? WHERE id = 1').run(payload.sequence || getNextInvoiceNumber().nextSequence)
+    db.prepare('UPDATE invoice_sequence SET lastSequence = ? WHERE id = 1').run(payload.sequence || nextNumber.nextSequence)
   }
 
   const insertItem = db.prepare(`INSERT INTO invoice_items
     (invoiceId, serial, description, hsn, quantity, rate, unit, amount, taxRate)
-    VALUES (@invoiceId, @serial, @description, @hsn, @quantity, @rate, @unit, @amount, @taxRate)`) 
+    VALUES (@invoiceId, @serial, @description, @hsn, @quantity, @rate, @unit, @amount, @taxRate)`)
   const insertMany = db.transaction((items) => {
-    items.forEach((item) => insertItem.run({ ...item, invoiceId }))
+    items.forEach((item) => insertItem.run({
+      ...item,
+      invoiceId,
+      taxRate: item.taxRate || 5,
+    }))
   })
   insertMany(payload.items || [])
 

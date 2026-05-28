@@ -4,8 +4,18 @@ import { useNavigate, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { AppContext } from '../context/AppContext'
 import { api } from '../services/api'
-import { downloadInvoicePdf, printInvoice } from '../pdf/invoicePdf'
+import { downloadInvoicePdf, downloadInvoicePdfNoGst, printInvoice, printInvoiceNoGst } from '../pdf/invoicePdf'
 import { toIndianCurrency } from '../utils/format'
+
+const splitBuyerAddress = (value = '') => {
+  const lines = String(value || '').split(/\r?\n/).map((line) => line.trim())
+  return {
+    buyerAddressLine1: lines[0] || '',
+    buyerAddressLine2: lines.slice(1).join(' ').trim(),
+  }
+}
+
+const joinBuyerAddress = (line1 = '', line2 = '') => [line1.trim(), line2.trim()].filter(Boolean).join('\n')
 
 function InvoicePreview() {
   const { id } = useParams()
@@ -31,14 +41,14 @@ function InvoicePreview() {
       destination: '',
       termsOfDelivery: 'Within India',
       buyerName: '',
-      buyerAddress: '',
+      buyerAddressLine1: '',
+      buyerAddressLine2: '',
       buyerGstin: '',
       buyerState: '',
-      buyerStateCode: '',
       bankName: settings?.bankName || '',
       accountNumber: settings?.accountNumber || '',
       branchIfsc: settings?.branchIfsc || '',
-      items: [{ description: '', hsn: '', quantity: 1, rate: 0, unit: 'Pcs' }],
+      items: [{ description: '', hsn: settings?.hsnSac || '', quantity: 1, rate: 0, unit: 'Pcs' }],
     },
   })
 
@@ -51,9 +61,7 @@ function InvoicePreview() {
   }, [id])
 
   useEffect(() => {
-    if (!invoice) {
-      return
-    }
+    if (!invoice) return
     reset(mapInvoiceToForm(invoice))
   }, [invoice, reset])
 
@@ -72,21 +80,20 @@ function InvoicePreview() {
     destination: record.destination || '',
     termsOfDelivery: record.termsOfDelivery || 'Within India',
     buyerName: record.buyerName || '',
-    buyerAddress: record.buyerAddress || '',
+    ...splitBuyerAddress(record.buyerAddress || ''),
     buyerGstin: record.buyerGstin || '',
     buyerState: record.buyerState || '',
-    buyerStateCode: record.buyerStateCode || '',
     bankName: record.bankName || settings?.bankName || '',
     accountNumber: record.accountNumber || settings?.accountNumber || '',
     branchIfsc: record.branchIfsc || settings?.branchIfsc || '',
     items: Array.isArray(record.items) && record.items.length
       ? record.items.map((item) => ({
-          description: item.description || '',
-          hsn: item.hsn || '',
-          quantity: Number(item.quantity || 0),
-          rate: Number(item.rate || 0),
-          unit: item.unit || 'Pcs',
-        }))
+        description: item.description || '',
+        hsn: item.hsn || '',
+        quantity: Number(item.quantity || 0),
+        rate: Number(item.rate || 0),
+        unit: item.unit || 'Pcs',
+      }))
       : [{ description: '', hsn: '', quantity: 1, rate: 0, unit: 'Pcs' }],
   })
 
@@ -119,75 +126,83 @@ function InvoicePreview() {
       toast.error('Invoice not found')
       return
     }
-
     setInvoice(response)
   }
 
-  const buildPreviewInvoice = () => ({
-    settings: {
-      companyName: settings?.companyName || 'EXTREME EMBROIDERIES',
-      address1: settings?.address1 || '',
-      address2: settings?.address2 || '',
-      city: settings?.city || '',
-      pincode: settings?.pincode || '',
-      gstin: settings?.gstin || '',
-      stateName: settings?.stateName || '',
-      stateCode: settings?.stateCode || '',
-      email: settings?.email || '',
-      bankName: settings?.bankName || '',
-      accountNumber: settings?.accountNumber || '',
-      branchIfsc: settings?.branchIfsc || '',
-    },
-    invoice: {
-      invoiceNumber: formValues.invoiceNumber || invoice?.invoiceNumber || '',
-      invoiceDate: formValues.invoiceDate || invoice?.invoiceDate || '',
-      deliveryNote: formValues.deliveryNote || invoice?.deliveryNote || '',
-      paymentTerms: formValues.paymentTerms || invoice?.paymentTerms || '',
-      referenceNo: formValues.referenceNo || invoice?.referenceNo || '',
-      referenceDate: formValues.referenceDate || invoice?.referenceDate || '',
-      orderNo: formValues.orderNo || invoice?.orderNo || '',
-      orderDate: formValues.orderDate || invoice?.orderDate || '',
-      dispatchDocNo: formValues.dispatchDocNo || invoice?.dispatchDocNo || '',
-      dispatchDate: formValues.dispatchDate || invoice?.dispatchDate || '',
-      transporter: formValues.transporter || invoice?.transporter || '',
-      destination: formValues.destination || invoice?.destination || '',
-      termsOfDelivery: formValues.termsOfDelivery || invoice?.termsOfDelivery || '',
-      buyerName: formValues.buyerName || invoice?.buyerName || '',
-      buyerAddress: formValues.buyerAddress || invoice?.buyerAddress || '',
-      buyerGstin: formValues.buyerGstin || invoice?.buyerGstin || '',
-      buyerState: formValues.buyerState || invoice?.buyerState || '',
-      buyerStateCode: formValues.buyerStateCode || invoice?.buyerStateCode || '',
-      amountWords: toIndianCurrency(totals.finalAmount),
-    },
-    items: (items || []).map((item) => ({
-      description: item.description || '',
-      hsn: item.hsn || '',
-      quantity: Number(item.quantity || 0),
-      rate: Number(item.rate || 0),
-      unit: item.unit || 'Pcs',
-      amount: Number(item.quantity || 0) * Number(item.rate || 0),
-    })),
-    totals: {
-      taxableValue: totals.taxableValue,
-      cgstAmount: totals.cgstAmount,
-      sgstAmount: totals.sgstAmount,
-      roundOff: totals.roundOff,
-      totalAmount: totals.finalAmount,
-      amountWords: toIndianCurrency(totals.finalAmount),
-    },
-  })
+  // ── Shared payload builder — used by both GST and no-GST downloads ──────────
+  const buildPreviewInvoice = () => {
+    const cgstAmt = totals.cgstAmount
+    const sgstAmt = totals.sgstAmount
+    return {
+      settings: {
+        companyName: settings?.companyName || '',
+        address1: settings?.address1 || '',
+        address2: settings?.address2 || '',
+        city: settings?.city || '',
+        pincode: settings?.pincode || '',
+        gstin: settings?.gstin || '',
+        stateName: settings?.stateName || '',
+        email: settings?.email || '',
+        bankName: settings?.bankName || '',
+        accountNumber: settings?.accountNumber || '',
+        branchIfsc: settings?.branchIfsc || '',
+      },
+      invoice: {
+        invoiceNumber: formValues.invoiceNumber || invoice?.invoiceNumber || '',
+        invoiceDate: formValues.invoiceDate || invoice?.invoiceDate || '',
+        deliveryNote: formValues.deliveryNote || invoice?.deliveryNote || '',
+        paymentTerms: formValues.paymentTerms || invoice?.paymentTerms || '',
+        referenceNo: formValues.referenceNo || invoice?.referenceNo || '',
+        referenceDate: formValues.referenceDate || invoice?.referenceDate || '',
+        orderNo: formValues.orderNo || invoice?.orderNo || '',
+        orderDate: formValues.orderDate || invoice?.orderDate || '',
+        dispatchDocNo: formValues.dispatchDocNo || invoice?.dispatchDocNo || '',
+        dispatchDate: formValues.dispatchDate || invoice?.dispatchDate || '',
+        transporter: formValues.transporter || invoice?.transporter || '',
+        destination: formValues.destination || invoice?.destination || '',
+        termsOfDelivery: formValues.termsOfDelivery || invoice?.termsOfDelivery || '',
+        buyerName: formValues.buyerName || invoice?.buyerName || '',
+        buyerAddress: joinBuyerAddress(formValues.buyerAddressLine1, formValues.buyerAddressLine2),
+        buyerGstin: formValues.buyerGstin || invoice?.buyerGstin || '',
+        buyerState: formValues.buyerState || invoice?.buyerState || '',
+        amountWords: toIndianCurrency(totals.finalAmount),
+        bankName: formValues.bankName || settings?.bankName || '',
+        accountNumber: formValues.accountNumber || settings?.accountNumber || '',
+        branchIfsc: formValues.branchIfsc || settings?.branchIfsc || '',
+      },
+      items: (items || []).map((item) => ({
+        description: item.description || '',
+        hsn: item.hsn || '',
+        quantity: Number(item.quantity || 0),
+        rate: Number(item.rate || 0),
+        unit: item.unit || 'Pcs',
+        amount: Number(item.quantity || 0) * Number(item.rate || 0),
+      })),
+      totals: {
+        taxableValue: totals.taxableValue,
+        cgstAmount: cgstAmt,
+        sgstAmount: sgstAmt,
+        roundOff: totals.roundOff,
+        totalAmount: totals.finalAmount,
+        finalAmount: totals.finalAmount,
+        totalQuantity: totals.totalQuantity,
+        amountWords: toIndianCurrency(totals.finalAmount),
+        // Required by invoicePdf.js for the "Tax Amount (in words)" line
+        taxAmountWords: toIndianCurrency(cgstAmt + sgstAmt),
+        // No-GST invoice: amount in words uses taxableValue only (no CGST/SGST)
+        noGstAmountWords: toIndianCurrency(totals.taxableValue),
+      },
+    }
+  }
 
   const onSave = async (data) => {
-    if (!invoice) {
-      return
-    }
-
+    if (!invoice) return
     setIsSaving(true)
-
     try {
       const payload = {
         ...data,
         id: invoice.id,
+        buyerAddress: joinBuyerAddress(data.buyerAddressLine1, data.buyerAddressLine2),
         bankName: data.bankName || settings?.bankName || '',
         accountNumber: data.accountNumber || settings?.accountNumber || '',
         branchIfsc: data.branchIfsc || settings?.branchIfsc || '',
@@ -209,13 +224,11 @@ function InvoicePreview() {
           amount: Number(item.quantity || 0) * Number(item.rate || 0),
         })),
       }
-
       const response = await api.saveInvoice(payload)
       if (response?.success === false || !response) {
         toast.error('Unable to update invoice')
         return
       }
-
       setInvoice(response)
       setIsEditing(false)
       toast.success('Invoice updated')
@@ -225,16 +238,20 @@ function InvoicePreview() {
   }
 
   const handleCancel = () => {
-    if (!invoice) {
-      return
-    }
-
+    if (!invoice) return
     reset(mapInvoiceToForm(invoice))
     setIsEditing(false)
   }
 
+  const invoiceFilename = (suffix = '') =>
+    `${formValues.invoiceNumber || invoice?.invoiceNumber || 'invoice'}${suffix}.pdf`
+
   if (!invoice) {
-    return <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center text-slate-500 shadow-card">Loading invoice preview…</div>
+    return (
+      <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center text-slate-500 shadow-card">
+        Loading invoice preview…
+      </div>
+    )
   }
 
   return (
@@ -245,20 +262,18 @@ function InvoicePreview() {
           <p className="mt-1 text-sm text-slate-500">Review, print or download the A4 invoice, and edit the saved invoice when needed.</p>
         </div>
         <div className="flex flex-wrap gap-3">
+          {/* Edit / Save */}
           <button
             type="button"
             onClick={() => {
-              if (!isEditing) {
-                setIsEditing(true)
-                return
-              }
-
+              if (!isEditing) { setIsEditing(true); return }
               handleSubmit(onSave)()
             }}
             className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800"
           >
             {isEditing ? (isSaving ? 'Saving…' : 'Save Changes') : 'Edit Invoice'}
           </button>
+
           {isEditing && (
             <button
               type="button"
@@ -268,9 +283,11 @@ function InvoicePreview() {
               Cancel
             </button>
           )}
+
+          {/* ── GST PDF / Print ── */}
           <button
             type="button"
-            onClick={() => downloadInvoicePdf(buildPreviewInvoice(), `${formValues.invoiceNumber || invoice.invoiceNumber || 'invoice'}.pdf`)}
+            onClick={() => downloadInvoicePdf(buildPreviewInvoice(), invoiceFilename())}
             className="rounded-full border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
           >
             Download PDF
@@ -282,6 +299,23 @@ function InvoicePreview() {
           >
             Print
           </button>
+
+          {/* ── No-GST PDF / Print ── */}
+          <button
+            type="button"
+            onClick={() => downloadInvoicePdfNoGst(buildPreviewInvoice(), invoiceFilename('-no-gst'))}
+            className="rounded-full border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+          >
+            Download PDF (No GST)
+          </button>
+          <button
+            type="button"
+            onClick={() => printInvoiceNoGst(buildPreviewInvoice())}
+            className="rounded-full border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+          >
+            Print (No GST)
+          </button>
+
           <button
             type="button"
             onClick={() => navigate('/invoice-history')}
@@ -310,50 +344,6 @@ function InvoicePreview() {
                   Invoice Date
                   <input type="date" {...register('invoiceDate')} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
                 </label>
-                <label className="text-sm font-medium text-slate-700">
-                  Delivery Note
-                  <input {...register('deliveryNote')} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-                </label>
-                <label className="text-sm font-medium text-slate-700">
-                  Mode / Terms of Payment
-                  <input {...register('paymentTerms')} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-                </label>
-                <label className="text-sm font-medium text-slate-700">
-                  Reference No.
-                  <input {...register('referenceNo')} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-                </label>
-                <label className="text-sm font-medium text-slate-700">
-                  Reference Date
-                  <input type="date" {...register('referenceDate')} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-                </label>
-                <label className="text-sm font-medium text-slate-700">
-                  Buyer's Order No.
-                  <input {...register('orderNo')} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-                </label>
-                <label className="text-sm font-medium text-slate-700">
-                  Order Date
-                  <input type="date" {...register('orderDate')} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-                </label>
-                <label className="text-sm font-medium text-slate-700">
-                  Dispatch Doc No.
-                  <input {...register('dispatchDocNo')} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-                </label>
-                <label className="text-sm font-medium text-slate-700">
-                  Dispatch Date
-                  <input type="date" {...register('dispatchDate')} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-                </label>
-                <label className="text-sm font-medium text-slate-700">
-                  Transporter
-                  <input {...register('transporter')} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-                </label>
-                <label className="text-sm font-medium text-slate-700">
-                  Destination
-                  <input {...register('destination')} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-                </label>
-                <label className="text-sm font-medium text-slate-700 md:col-span-2">
-                  Terms of Delivery
-                  <input {...register('termsOfDelivery')} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-                </label>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -361,9 +351,13 @@ function InvoicePreview() {
                   Buyer Name
                   <input {...register('buyerName')} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
                 </label>
-                <label className="text-sm font-medium text-slate-700 md:col-span-2">
-                  Buyer Address
-                  <textarea {...register('buyerAddress')} rows={3} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
+                <label className="text-sm font-medium text-slate-700">
+                  Address Line 1
+                  <input {...register('buyerAddressLine1')} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
+                </label>
+                <label className="text-sm font-medium text-slate-700">
+                  Address Line 2
+                  <input {...register('buyerAddressLine2')} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
                 </label>
                 <label className="text-sm font-medium text-slate-700">
                   Buyer GSTIN
@@ -373,22 +367,6 @@ function InvoicePreview() {
                   Buyer State
                   <input {...register('buyerState')} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
                 </label>
-                <label className="text-sm font-medium text-slate-700">
-                  Buyer State Code
-                  <input {...register('buyerStateCode')} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-                </label>
-                <label className="text-sm font-medium text-slate-700">
-                  Bank Name
-                  <input {...register('bankName')} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-                </label>
-                <label className="text-sm font-medium text-slate-700">
-                  Account Number
-                  <input {...register('accountNumber')} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-                </label>
-                <label className="text-sm font-medium text-slate-700">
-                  Branch / IFSC
-                  <input {...register('branchIfsc')} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-                </label>
               </div>
 
               <div className="space-y-3">
@@ -396,7 +374,7 @@ function InvoicePreview() {
                   <h4 className="text-base font-semibold text-slate-900">Line Items</h4>
                   <button
                     type="button"
-                    onClick={() => append({ description: '', hsn: '', quantity: 1, rate: 0, unit: 'Pcs' })}
+                    onClick={() => append({ description: '', hsn: settings?.hsnSac || '', quantity: 1, rate: 0, unit: 'Pcs' })}
                     className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
                   >
                     Add Line Item
@@ -457,72 +435,70 @@ function InvoicePreview() {
         </section>
       )}
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-card">
-        <div id="invoice-preview" className="invoice-sheet" style={{ fontFamily: 'Arial, sans-serif', fontSize: '12px', color: '#000' }}>
-          <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '14px', marginBottom: '4px', letterSpacing: '2px' }}>
+      {/* ── INVOICE PRINT PREVIEW (GST version — always visible) ── */}
+      <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-card overflow-x-auto">
+        <div
+          id="invoice-preview"
+          className="invoice-sheet"
+          style={{
+            fontFamily: 'Arial, sans-serif',
+            fontSize: '9px',
+            color: '#000',
+            fontWeight: 'bold',
+            width: '210mm',
+            minHeight: '297mm',
+            margin: '0 auto',
+            padding: '6mm',
+            boxSizing: 'border-box',
+            backgroundColor: '#fff',
+          }}
+        >
+          <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '13px', marginBottom: '4px', letterSpacing: '2px' }}>
             TAX INVOICE
           </div>
 
           <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #000' }}>
             <tbody>
               <tr>
-                <td style={{ width: '55%', verticalAlign: 'top', padding: '0', borderRight: '1px solid #000' }}>
-                  <div style={{ padding: '8px 10px', borderBottom: '1px solid #000' }}>
-                    <div style={{ fontWeight: 'bold', fontSize: '15px', textTransform: 'uppercase', marginBottom: '4px' }}>
-                      {settings?.companyName || 'EXTREME EMBROIDERIES'}
+                <td style={{ width: '50%', verticalAlign: 'top', padding: '0', borderRight: '1px solid #000' }}>
+                  <div style={{ padding: '6px 8px' }}>
+                    <div style={{ fontWeight: 'bold', fontSize: '13px', textTransform: 'uppercase', marginBottom: '3px' }}>
+                      {settings?.companyName || ''}
                     </div>
-                    <div style={{ lineHeight: '1.6' }}>
+                    <div style={{ lineHeight: '1.5', fontWeight: '400' }}>
                       {settings?.address1 && <div>{settings.address1}</div>}
                       {settings?.address2 && <div>{settings.address2}</div>}
                       {(settings?.city || settings?.pincode) && (
                         <div>{[settings?.city, settings?.pincode].filter(Boolean).join(' - ')}</div>
                       )}
-                      {settings?.gstin && <div style={{ marginTop: '4px' }}>GSTIN/UIN : {settings.gstin}</div>}
-                      {settings?.stateName && (
-                        <div>State Name : {settings.stateName}{settings?.stateCode ? `, Code : ${settings.stateCode}` : ''}</div>
-                      )}
+                      {settings?.gstin && <div style={{ marginTop: '3px' }}>GSTIN/UIN : {settings.gstin}</div>}
+                      {settings?.stateName && <div>State Name : {settings.stateName}</div>}
                       {settings?.email && <div>E-Mail : {settings.email}</div>}
                     </div>
                   </div>
-                  <div style={{ padding: '8px 10px' }}>
-                    <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>Buyer (Bill to)</div>
-                    <div style={{ fontWeight: 'bold', fontSize: '13px' }}>{formValues.buyerName}</div>
-                    <div style={{ whiteSpace: 'pre-line', lineHeight: '1.6' }}>{formValues.buyerAddress}</div>
-                    {formValues.buyerGstin && <div style={{ marginTop: '4px' }}>GSTIN/UIN : {formValues.buyerGstin}</div>}
-                    {formValues.buyerState && (
-                      <div>
-                        State Name : {formValues.buyerState}
-                        {formValues.buyerStateCode ? `, Code : ${formValues.buyerStateCode}` : ''}
-                      </div>
-                    )}
-                  </div>
                 </td>
-                <td style={{ width: '45%', verticalAlign: 'top', padding: '0' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', height: '100%' }}>
+
+                <td style={{ width: '50%', verticalAlign: 'top', padding: '0' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <tbody>
-                      {[
-                        ['Invoice No.', formValues.invoiceNumber],
-                        ['Dated', formValues.invoiceDate],
-                        ['Delivery Note', formValues.deliveryNote],
-                        ['Mode/Terms of Payment', formValues.paymentTerms],
-                        ['Reference No. & Date.', `${formValues.referenceNo || ''} ${formValues.referenceDate || ''}`.trim()],
-                        ['Buyer\'s Order No.', formValues.orderNo],
-                        ['Dated', formValues.orderDate],
-                        ['Dispatch Doc No.', formValues.dispatchDocNo],
-                        ['Delivery Note Date', formValues.dispatchDate],
-                        ['Dispatched through', formValues.transporter],
-                        ['Destination', formValues.destination],
-                        ['Terms of Delivery', formValues.termsOfDelivery],
-                      ].map(([label, value], index) => (
-                        <tr key={index}>
-                          <td style={{ padding: '3px 8px', borderBottom: '1px solid #000', borderRight: '1px solid #000', fontWeight: '600', width: '50%', verticalAlign: 'top' }}>
-                            {label}
-                          </td>
-                          <td style={{ padding: '3px 8px', borderBottom: '1px solid #000', verticalAlign: 'top' }}>
-                            {value || ''}
-                          </td>
-                        </tr>
-                      ))}
+                      <tr>
+                        <td style={{ padding: '3px 6px', borderBottom: '1px solid #000', borderRight: '1px solid #000', fontWeight: 'bold', width: '45%', fontSize: '9px' }}>Invoice No.</td>
+                        <td style={{ padding: '3px 6px', borderBottom: '1px solid #000', fontWeight: 'bold', fontSize: '9px' }}>{formValues.invoiceNumber}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ padding: '3px 6px', borderBottom: '1px solid #000', borderRight: '1px solid #000', fontWeight: 'bold', fontSize: '9px' }}>Dated</td>
+                        <td style={{ padding: '3px 6px', borderBottom: '1px solid #000', fontWeight: 'bold', fontSize: '9px' }}>{formValues.invoiceDate}</td>
+                      </tr>
+                      <tr>
+                        <td colSpan={2} style={{ padding: '6px 8px', verticalAlign: 'top' }}>
+                          <div style={{ fontWeight: 'bold', marginBottom: '3px', fontSize: '14px' }}>Buyer (Bill to)</div>
+                          <div style={{ fontWeight: 'bold', fontSize: '12px' }}>{formValues.buyerName}</div>
+                          <div style={{ lineHeight: '1.5', fontWeight: '400', fontSize: '11px' }}>{formValues.buyerAddressLine1}</div>
+                          {formValues.buyerAddressLine2 && <div style={{ lineHeight: '1.5', fontWeight: '400', fontSize: '11px' }}>{formValues.buyerAddressLine2}</div>}
+                          {formValues.buyerGstin && <div style={{ marginTop: '3px', fontWeight: '400', fontSize: '11px' }}>GSTIN/UIN : {formValues.buyerGstin}</div>}
+                          {formValues.buyerState && <div style={{ fontWeight: '400', fontSize: '11px' }}>State Name : {formValues.buyerState}</div>}
+                        </td>
+                      </tr>
                     </tbody>
                   </table>
                 </td>
@@ -530,197 +506,224 @@ function InvoicePreview() {
 
               <tr>
                 <td colSpan={2} style={{ padding: '0', borderTop: '1px solid #000' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid #000' }}>
-                        {['Sl No.', 'Description of Goods', 'HSN/SAC', 'Quantity', 'Rate', 'per', 'Amount'].map((header, index) => (
-                          <th key={index} style={{
-                            padding: '5px 8px',
-                            textAlign: index >= 3 ? 'right' : 'left',
-                            fontWeight: '600',
-                            borderRight: index < 6 ? '1px solid #000' : 'none',
-                            whiteSpace: 'nowrap',
-                          }}>
-                            {header}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(items || []).map((item, index) => {
-                        const amount = Number(item.quantity || 0) * Number(item.rate || 0)
-                        return (
-                          <tr key={index} style={{ borderBottom: '1px solid #ddd' }}>
-                            <td style={{ padding: '4px 8px', verticalAlign: 'top', borderRight: '1px solid #000', textAlign: 'center' }}>{index + 1}</td>
-                            <td style={{ padding: '4px 8px', verticalAlign: 'top', borderRight: '1px solid #000' }}>{item.description}</td>
-                            <td style={{ padding: '4px 8px', verticalAlign: 'top', borderRight: '1px solid #000', textAlign: 'right' }}>{item.hsn}</td>
-                            <td style={{ padding: '4px 8px', verticalAlign: 'top', borderRight: '1px solid #000', textAlign: 'right' }}>
-                              {item.quantity ? `${Number(item.quantity).toLocaleString('en-IN')} Pcs` : ''}
-                            </td>
-                            <td style={{ padding: '4px 8px', verticalAlign: 'top', borderRight: '1px solid #000', textAlign: 'right' }}>
-                              {item.rate ? Number(item.rate).toFixed(2) : ''}
-                            </td>
-                            <td style={{ padding: '4px 8px', verticalAlign: 'top', borderRight: '1px solid #000', textAlign: 'right' }}>{item.unit}</td>
-                            <td style={{ padding: '4px 8px', verticalAlign: 'top', textAlign: 'right' }}>
-                              {amount ? Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}
+                  {(() => {
+                    const cols = ['5%', '38%', '10%', '12%', '11%', '8%', '16%']
+                    const colGroup = (
+                      <colgroup>
+                        {cols.map((w, i) => <col key={i} style={{ width: w }} />)}
+                      </colgroup>
+                    )
+                    const cellBorder = (i) => i < cols.length - 1 ? '1px solid #000' : 'none'
+                    return (
+                      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                        {colGroup}
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid #000' }}>
+                            {['Sl No.', 'Description of Goods', 'HSN/SAC', 'Quantity', 'Rate', 'per', 'Amount'].map((h, i) => (
+                              <th key={i} style={{ padding: '3px 5px', fontWeight: 'bold', fontSize: '9px', textAlign: i === 0 ? 'center' : i === 1 ? 'left' : 'right', borderRight: cellBorder(i), borderBottom: '1px solid #000', whiteSpace: 'nowrap' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td colSpan={7} style={{ padding: 0, height: '420px', verticalAlign: 'top' }}>
+                              <div style={{ height: '420px', overflow: 'hidden' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                                  {colGroup}
+                                  <tbody>
+                                    {(items || []).map((item, index) => {
+                                      const amount = Number(item.quantity || 0) * Number(item.rate || 0)
+                                      const cells = [
+                                        { val: index + 1, align: 'center' },
+                                        { val: item.description, align: 'left' },
+                                        { val: item.hsn || settings?.hsnSac || '', align: 'right' },
+                                        { val: item.quantity ? `${Number(item.quantity).toLocaleString('en-IN')} Pcs` : '', align: 'right' },
+                                        { val: item.rate ? Number(item.rate).toFixed(2) : '', align: 'right' },
+                                        { val: item.unit, align: 'right' },
+                                        { val: amount ? Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '', align: 'right' },
+                                      ]
+                                      return (
+                                        <tr key={index}>
+                                          {cells.map((cell, ci) => (
+                                            <td key={ci} style={{ padding: '2px 5px', fontSize: '9px', fontWeight: 'bold', textAlign: cell.align, borderRight: cellBorder(ci), verticalAlign: 'top', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cell.val}</td>
+                                          ))}
+                                        </tr>
+                                      )
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
                             </td>
                           </tr>
-                        )
-                      })}
-                      <tr><td colSpan={7} style={{ height: '40px' }}></td></tr>
 
-                      <tr style={{ borderTop: '1px solid #000' }}>
-                        <td colSpan={6} style={{ padding: '3px 8px', textAlign: 'right', borderRight: '1px solid #000' }}>CGST 2.5%</td>
-                        <td style={{ padding: '3px 8px', textAlign: 'right' }}>
-                          {Number(totals.cgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td colSpan={6} style={{ padding: '3px 8px', textAlign: 'right', borderRight: '1px solid #000' }}>SGST 2.5%</td>
-                        <td style={{ padding: '3px 8px', textAlign: 'right' }}>
-                          {Number(totals.sgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                      {totals.roundOff !== 0 && (
-                        <tr>
-                          <td colSpan={6} style={{ padding: '3px 8px', textAlign: 'right', borderRight: '1px solid #000' }}>Less : ROUND OFF</td>
-                          <td style={{ padding: '3px 8px', textAlign: 'right' }}>{totals.roundOff < 0 ? '(-)' : '(+)'}{Math.abs(totals.roundOff).toFixed(2)}</td>
-                        </tr>
-                      )}
-                      <tr style={{ borderTop: '1px solid #000', fontWeight: 'bold' }}>
-                        <td colSpan={3} style={{ padding: '4px 8px', borderRight: '1px solid #000' }}>Total</td>
-                        <td style={{ padding: '4px 8px', textAlign: 'right', borderRight: '1px solid #000' }}>
-                          {totals.totalQuantity ? `${Number(totals.totalQuantity).toLocaleString('en-IN')} Pcs` : ''}
-                        </td>
-                        <td colSpan={2} style={{ padding: '4px 8px', borderRight: '1px solid #000' }}></td>
-                        <td style={{ padding: '4px 8px', textAlign: 'right' }}>₹ {Number(totals.finalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </td>
-              </tr>
-
-              <tr style={{ borderTop: '1px solid #000' }}>
-                <td colSpan={2} style={{ padding: '5px 10px' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <tbody>
-                      <tr>
-                        <td style={{ verticalAlign: 'top', borderRight: '1px solid #000', paddingRight: '10px', width: '70%' }}>
-                          <span style={{ fontWeight: 'bold' }}>Amount Chargeable (in words)</span>
-                          <span style={{ float: 'right', fontStyle: 'italic' }}>E. &amp; O.E</span>
-                          <div style={{ marginTop: '4px', fontWeight: '600' }}>{toIndianCurrency(totals.finalAmount)}</div>
-                        </td>
-                        <td style={{ verticalAlign: 'top', paddingLeft: '10px' }}></td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </td>
-              </tr>
-
-              <tr style={{ borderTop: '1px solid #000' }}>
-                <td colSpan={2} style={{ padding: '0' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid #000', backgroundColor: '#f5f5f5' }}>
-                        <th style={{ padding: '4px 8px', borderRight: '1px solid #000', textAlign: 'left' }}>HSN/SAC</th>
-                        <th style={{ padding: '4px 8px', borderRight: '1px solid #000', textAlign: 'right' }}>Taxable Value</th>
-                        <th style={{ padding: '4px 8px', borderRight: '1px solid #000', textAlign: 'center' }} colSpan={2}>Central Tax</th>
-                        <th style={{ padding: '4px 8px', borderRight: '1px solid #000', textAlign: 'center' }} colSpan={2}>State Tax</th>
-                        <th style={{ padding: '4px 8px', textAlign: 'right' }}>Total Tax Amount</th>
-                      </tr>
-                      <tr style={{ borderBottom: '1px solid #000' }}>
-                        <th style={{ padding: '3px 8px', borderRight: '1px solid #000' }}></th>
-                        <th style={{ padding: '3px 8px', borderRight: '1px solid #000' }}></th>
-                        <th style={{ padding: '3px 8px', borderRight: '1px solid #000', textAlign: 'right' }}>Rate</th>
-                        <th style={{ padding: '3px 8px', borderRight: '1px solid #000', textAlign: 'right' }}>Amount</th>
-                        <th style={{ padding: '3px 8px', borderRight: '1px solid #000', textAlign: 'right' }}>Rate</th>
-                        <th style={{ padding: '3px 8px', borderRight: '1px solid #000', textAlign: 'right' }}>Amount</th>
-                        <th style={{ padding: '3px 8px', textAlign: 'right' }}></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(() => {
-                        const hsnMap = {}
-
-                        ;(items || []).forEach((item) => {
-                          const hsn = item.hsn || 'N/A'
-                          const taxable = Number(item.quantity || 0) * Number(item.rate || 0)
-                          hsnMap[hsn] = (hsnMap[hsn] || 0) + taxable
-                        })
-
-                        return Object.entries(hsnMap).map(([hsn, taxable]) => {
-                          const cgst = Number((Number(taxable) * 0.025).toFixed(2))
-                          const sgst = Number((Number(taxable) * 0.025).toFixed(2))
-
-                          return (
-                            <tr key={hsn} style={{ borderBottom: '1px solid #ddd' }}>
-                              <td style={{ padding: '3px 8px', borderRight: '1px solid #000' }}>{hsn}</td>
-                              <td style={{ padding: '3px 8px', borderRight: '1px solid #000', textAlign: 'right' }}>
-                                {Number(taxable).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                              </td>
-                              <td style={{ padding: '3px 8px', borderRight: '1px solid #000', textAlign: 'right' }}>2.50%</td>
-                              <td style={{ padding: '3px 8px', borderRight: '1px solid #000', textAlign: 'right' }}>
-                                {Number(cgst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                              </td>
-                              <td style={{ padding: '3px 8px', borderRight: '1px solid #000', textAlign: 'right' }}>2.50%</td>
-                              <td style={{ padding: '3px 8px', borderRight: '1px solid #000', textAlign: 'right' }}>
-                                {Number(sgst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                              </td>
-                              <td style={{ padding: '3px 8px', textAlign: 'right' }}>
-                                {Number(cgst + sgst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          {/* Taxable subtotal */}
+                          <tr style={{ borderTop: '1px solid #000' }}>
+                            <td colSpan={6} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: 'bold', fontSize: '9px' }}></td>
+                            <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: 'bold', fontSize: '9px', borderLeft: '1px solid #000' }}>
+                              {Number(totals.taxableValue).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td colSpan={6} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: 'bold', fontSize: '9px' }}>CGST 2.5%</td>
+                            <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: 'bold', fontSize: '9px', borderLeft: '1px solid #000' }}>
+                              {Number(totals.cgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td colSpan={6} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: 'bold', fontSize: '9px' }}>SGST 2.5%</td>
+                            <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: 'bold', fontSize: '9px', borderLeft: '1px solid #000' }}>
+                              {Number(totals.sgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                          {totals.roundOff !== 0 && (
+                            <tr>
+                              <td colSpan={6} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: 'bold', fontSize: '9px' }}>ROUND OFF</td>
+                              <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: 'bold', fontSize: '9px', borderLeft: '1px solid #000' }}>
+                                {totals.roundOff < 0 ? '(-)' : '(+)'}{Math.abs(totals.roundOff).toFixed(2)}
                               </td>
                             </tr>
-                          )
-                        })
-                      })()}
-                      <tr style={{ borderTop: '1px solid #000', fontWeight: 'bold' }}>
-                        <td style={{ padding: '3px 8px', borderRight: '1px solid #000' }}>Total</td>
-                        <td style={{ padding: '3px 8px', borderRight: '1px solid #000', textAlign: 'right' }}>
-                          {Number(totals.taxableValue).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td style={{ padding: '3px 8px', borderRight: '1px solid #000' }}></td>
-                        <td style={{ padding: '3px 8px', borderRight: '1px solid #000', textAlign: 'right' }}>
-                          {Number(totals.cgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td style={{ padding: '3px 8px', borderRight: '1px solid #000' }}></td>
-                        <td style={{ padding: '3px 8px', borderRight: '1px solid #000', textAlign: 'right' }}>
-                          {Number(totals.sgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td style={{ padding: '3px 8px', textAlign: 'right' }}>
-                          {Number(totals.cgstAmount + totals.sgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <div style={{ padding: '4px 8px', borderTop: '1px solid #000', fontSize: '11px' }}>
-                    <strong>Tax Amount (in words) :</strong> {toIndianCurrency(totals.cgstAmount + totals.sgstAmount)}
-                  </div>
-                </td>
-              </tr>
+                          )}
+                          <tr style={{ borderTop: '1px solid #000' }}>
+                            <td style={{ padding: '3px 5px', fontWeight: 'bold', fontSize: '9px' }}>Total</td>
+                            <td colSpan={2} style={{ padding: '3px 5px' }}></td>
+                            <td style={{ padding: '3px 5px', textAlign: 'right', fontWeight: 'bold', fontSize: '9px' }}>
+                              {totals.totalQuantity ? `${Number(totals.totalQuantity).toLocaleString('en-IN')} Pcs` : ''}
+                            </td>
+                            <td colSpan={2} style={{ padding: '3px 5px' }}></td>
+                            <td style={{ padding: '3px 5px', textAlign: 'right', fontWeight: 'bold', fontSize: '9px', borderLeft: '1px solid #000' }}>
+                              ₹ {Number(totals.finalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                          </tr>
 
-              <tr style={{ borderTop: '1px solid #000' }}>
-                <td style={{ verticalAlign: 'top', padding: '8px 10px', borderRight: '1px solid #000', width: '55%' }}>
-                  <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>Declaration</div>
-                  <div style={{ fontSize: '11px', lineHeight: '1.6' }}>
-                    We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.
-                  </div>
-                  <div style={{ marginTop: '12px', fontWeight: 'bold', fontSize: '11px' }}>Company's Bank Details</div>
-                  <div style={{ fontSize: '11px', lineHeight: '1.8', marginTop: '4px' }}>
-                    <div>Bank Name : {formValues.bankName || settings?.bankName || ''}</div>
-                    <div>A/c No. : {formValues.accountNumber || settings?.accountNumber || ''}</div>
-                    <div>Branch &amp; IFS Code : {formValues.branchIfsc || settings?.branchIfsc || ''}</div>
-                  </div>
-                </td>
-                <td style={{ verticalAlign: 'top', padding: '8px 10px', textAlign: 'right' }}>
-                  <div>for {settings?.companyName || 'EXTREME EMBROIDERIES'}</div>
-                  <div style={{ marginTop: '50px', fontWeight: 'bold' }}>Authorised Signatory</div>
-                </td>
-              </tr>
+                          {/* Amount in words */}
+                          <tr style={{ borderTop: '1px solid #000' }}>
+                            <td colSpan={7} style={{ padding: '4px 8px' }}>
+                              <span style={{ fontWeight: 'bold', fontSize: '9px' }}>Amount Chargeable (in words)</span>
+                              <span style={{ float: 'right', fontStyle: 'italic', fontSize: '9px' }}>E. &amp; O.E</span>
+                              <div style={{ marginTop: '3px', fontWeight: 'bold', fontSize: '9px' }}>{toIndianCurrency(totals.finalAmount)}</div>
+                            </td>
+                          </tr>
 
-              <tr style={{ borderTop: '1px solid #000' }}>
-                <td colSpan={2} style={{ padding: '6px 10px', textAlign: 'center', fontSize: '11px', letterSpacing: '1px' }}>
-                  <div style={{ textTransform: 'uppercase' }}>SUBJECT TO TIRUPPUR JURISDICTION</div>
-                  <div style={{ marginTop: '2px' }}>This is a Computer Generated Invoice</div>
+                          {/* HSN/SAC GST summary */}
+                          <tr style={{ borderTop: '1px solid #000' }}>
+                            <td colSpan={7} style={{ padding: 0 }}>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                                <colgroup>
+                                  <col style={{ width: '14%' }} /><col style={{ width: '18%' }} />
+                                  <col style={{ width: '9%' }} /><col style={{ width: '14%' }} />
+                                  <col style={{ width: '9%' }} /><col style={{ width: '14%' }} />
+                                  <col style={{ width: '22%' }} />
+                                </colgroup>
+                                <thead>
+                                  <tr>
+                                    <th style={{ padding: '2px 5px', fontWeight: 'bold', fontSize: '9px', textAlign: 'left', borderRight: '1px solid #000', borderBottom: '1px solid #000' }} rowSpan={2}>HSN/SAC</th>
+                                    <th style={{ padding: '2px 5px', fontWeight: 'bold', fontSize: '9px', textAlign: 'right', borderRight: '1px solid #000', borderBottom: '1px solid #000' }} rowSpan={2}>Taxable Value</th>
+                                    <th style={{ padding: '2px 5px', fontWeight: 'bold', fontSize: '9px', textAlign: 'center', borderRight: '1px solid #000', borderBottom: '1px solid #000' }} colSpan={2}>Central Tax</th>
+                                    <th style={{ padding: '2px 5px', fontWeight: 'bold', fontSize: '9px', textAlign: 'center', borderRight: '1px solid #000', borderBottom: '1px solid #000' }} colSpan={2}>State Tax</th>
+                                    <th style={{ padding: '2px 5px', fontWeight: 'bold', fontSize: '9px', textAlign: 'right', borderBottom: '1px solid #000' }} rowSpan={2}>Total Tax Amount</th>
+                                  </tr>
+                                  <tr>
+                                    {['Rate', 'Amount', 'Rate', 'Amount'].map((h, i) => (
+                                      <th key={i} style={{ padding: '2px 5px', fontWeight: 'bold', fontSize: '9px', textAlign: 'right', borderRight: '1px solid #000', borderBottom: '1px solid #000' }}>{h}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {(() => {
+                                    const hsnMap = {}
+                                      ; (items || []).forEach((item) => {
+                                        const hsn = item.hsn || 'N/A'
+                                        hsnMap[hsn] = (hsnMap[hsn] || 0) + Number(item.quantity || 0) * Number(item.rate || 0)
+                                      })
+                                    return Object.entries(hsnMap).map(([hsn, taxable]) => {
+                                      const cgst = Number((taxable * 0.025).toFixed(2))
+                                      const sgst = Number((taxable * 0.025).toFixed(2))
+                                      return (
+                                        <tr key={hsn} style={{ borderBottom: '1px solid #000' }}>
+                                          <td style={{ padding: '2px 5px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', borderRight: '1px solid #000' }}>{hsn}</td>
+                                          <td style={{ padding: '2px 5px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(taxable).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                          <td style={{ padding: '2px 5px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right', borderRight: '1px solid #000' }}>2.50%</td>
+                                          <td style={{ padding: '2px 5px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(cgst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                          <td style={{ padding: '2px 5px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right', borderRight: '1px solid #000' }}>2.50%</td>
+                                          <td style={{ padding: '2px 5px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(sgst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                          <td style={{ padding: '2px 5px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right' }}>{Number(cgst + sgst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                        </tr>
+                                      )
+                                    })
+                                  })()}
+                                  <tr style={{ borderTop: '1px solid #000' }}>
+                                    <td style={{ padding: '2px 5px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', borderRight: '1px solid #000' }}>Total</td>
+                                    <td style={{ padding: '2px 5px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(totals.taxableValue).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                    <td style={{ padding: '2px 5px', borderRight: '1px solid #000' }}></td>
+                                    <td style={{ padding: '2px 5px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(totals.cgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                    <td style={{ padding: '2px 5px', borderRight: '1px solid #000' }}></td>
+                                    <td style={{ padding: '2px 5px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(totals.sgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                    <td style={{ padding: '2px 5px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right' }}>{Number(totals.cgstAmount + totals.sgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </td>
+                          </tr>
+
+                          {/* Tax amount in words */}
+                          <tr style={{ borderTop: '1px solid #000' }}>
+                            <td colSpan={7} style={{ padding: '3px 8px', fontSize: '9px', fontWeight: 'bold' }}>
+                              <strong>Tax Amount (in words) :</strong> {toIndianCurrency(totals.cgstAmount + totals.sgstAmount)}
+                            </td>
+                          </tr>
+
+                          {/* Bank + Signatory */}
+                          <tr style={{ borderTop: '1px solid #000' }}>
+                            <td colSpan={7} style={{ padding: 0 }}>
+                              <div style={{ display: 'flex' }}>
+                                <div style={{ width: '55%', padding: '6px 8px', borderRight: '1px solid #000' }}>
+                                  <div style={{ fontWeight: 'bold', fontSize: '9px', marginBottom: '3px' }}>Company's Bank Details</div>
+                                  <div
+                                    style={{
+                                      fontSize: '9px',
+                                      lineHeight: '1.7',
+                                      fontWeight: 'bold'
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex' }}>
+                                      <span style={{ width: '80px' }}>Bank Name</span>
+                                      <span>: {settings?.bankName || ''}</span>
+                                    </div>
+
+                                    <div style={{ display: 'flex' }}>
+                                      <span style={{ width: '80px' }}>A/c No.</span>
+                                      <span>: {settings?.accountNumber || ''}</span>
+                                    </div>
+
+                                    <div style={{ display: 'flex' }}>
+                                      <span style={{ width: '80px' }}>IFS Code</span>
+                                      <span>: {settings?.branchIfsc || ''}</span>
+                                    </div>
+                                  </div>
+                                  <div style={{ marginTop: '10px', fontWeight: 'bold', fontSize: '9px' }}>Declaration</div>
+                                  <div style={{ fontSize: '9px', lineHeight: '1.5', fontWeight: 'bold' }}>
+                                    We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.
+                                  </div>
+                                </div>
+                                <div style={{ width: '45%', padding: '6px 8px', textAlign: 'right' }}>
+                                  <div style={{ fontSize: '9px', fontWeight: 'bold' }}>for {settings?.companyName || ''}</div>
+                                  <div style={{ marginTop: '80px', fontWeight: 'bold', fontSize: '9px' }}>Authorised Signatory</div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+
+                          {/* Footer */}
+                          <tr style={{ borderTop: '1px solid #000' }}>
+                            <td colSpan={7} style={{ padding: '5px 8px', textAlign: 'center', fontSize: '9px', letterSpacing: '1px', fontWeight: 'bold' }}>
+                              <div style={{ textTransform: 'uppercase' }}>SUBJECT TO TIRUPPUR JURISDICTION</div>
+                              <div style={{ marginTop: '2px' }}>This is a Computer Generated Invoice</div>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    )
+                  })()}
                 </td>
               </tr>
             </tbody>

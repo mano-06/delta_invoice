@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron')
+  const { contextBridge, ipcRenderer } = require('electron')
 
 const invoke = (channel, payload) => ipcRenderer.invoke(channel, payload)
 const channels = [
@@ -19,6 +19,7 @@ const channels = [
   'app:importDatabase',
   'app:backupJson',
   'app:restoreJson',
+  'app:exportPdf',
 ]
 
 contextBridge.exposeInMainWorld('electron', {

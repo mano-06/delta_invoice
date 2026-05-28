@@ -24,10 +24,7 @@ function Products() {
   const handleEdit = (product) => {
     setEditing(product)
     setValue('name', product.name)
-    setValue('hsn', product.hsn)
     setValue('rate', product.rate)
-    setValue('gstRate', product.gstRate)
-    setValue('unit', product.unit)
   }
 
   const handleDelete = async (id) => {
@@ -48,7 +45,9 @@ function Products() {
       ...data,
       id: editing?.id,
       rate: Number(data.rate || 0),
-      gstRate: Number(data.gstRate || 0),
+      hsn: '',
+      gstRate: 0,
+      unit: '',
       createdAt: new Date().toISOString(),
     }
     const response = await api.saveProduct(payload)
@@ -77,25 +76,9 @@ function Products() {
               <label className="block text-sm font-medium text-slate-700">Product Name</label>
               <input {...register('name')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
             </div>
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-slate-700">HSN/SAC</label>
-                <input {...register('hsn')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700">Rate</label>
-                <input type="number" {...register('rate')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-              </div>
-            </div>
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-slate-700">GST %</label>
-                <input type="number" {...register('gstRate')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700">Unit</label>
-                <input {...register('unit')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Rate</label>
+              <input type="number" {...register('rate')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
             </div>
             <div className="flex flex-wrap gap-3">
               <button type="submit" className="rounded-full bg-slate-900 px-6 py-3 text-sm font-semibold text-white hover:bg-slate-800">Save Product</button>
@@ -116,8 +99,7 @@ function Products() {
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <p className="font-semibold text-slate-900">{product.name}</p>
-                    <p className="text-sm text-slate-500">HSN/SAC: {product.hsn}</p>
-                    <p className="text-sm text-slate-500">Rate: {product.rate} | GST: {product.gstRate}% | Unit: {product.unit}</p>
+                    <p className="text-sm text-slate-500">Rate: {product.rate}</p>
                   </div>
                   <div className="flex flex-wrap gap-2 text-sm">
                     <button onClick={() => handleEdit(product)} className="rounded-full bg-slate-900 px-4 py-2 text-white hover:bg-slate-800">Edit</button>

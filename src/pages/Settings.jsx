@@ -11,7 +11,7 @@ function Settings() {
     if (settings) {
       reset(settings)
     }
-  }, [settings])
+  }, [settings, reset])
 
   const onSubmit = async (data) => {
     const response = await saveSettings(data)
@@ -24,7 +24,7 @@ function Settings() {
     <div className="space-y-6">
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-card">
         <h2 className="text-2xl font-semibold text-slate-900">Settings</h2>
-        <p className="mt-1 text-sm text-slate-500">Company details, GST settings and invoice numbering format.</p>
+        <p className="mt-1 text-sm text-slate-500">Company details, GST settings, and shared invoice defaults.</p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="grid gap-6 xl:grid-cols-2">
@@ -63,15 +63,14 @@ function Settings() {
                 <input type="email" {...register('email')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
               </div>
             </div>
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-slate-700">State Name</label>
-                <input {...register('stateName')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700">State Code</label>
-                <input {...register('stateCode')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">State Name</label>
+              <input {...register('stateName')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">HSN/SAC</label>
+              <input {...register('hsnSac')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
+              <p className="mt-2 text-xs text-slate-500">This HSN/SAC will be used as the default for new invoice rows.</p>
             </div>
           </div>
         </div>
@@ -88,23 +87,8 @@ function Settings() {
               <input {...register('accountNumber')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Branch & IFS Code</label>
+              <label className="block text-sm font-medium text-slate-700">IFS Code</label>
               <input {...register('branchIfsc')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-            </div>
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-slate-700">Invoice Prefix</label>
-                <input {...register('invoicePrefix')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700">Starting Sequence</label>
-                <input type="number" {...register('invoiceStart')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700">Invoice Format</label>
-              <input {...register('invoiceFormat')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-              <p className="mt-2 text-xs text-slate-500">Use placeholders: {`{year}`}, {`{seq}`}</p>
             </div>
           </div>
           <div className="mt-6">

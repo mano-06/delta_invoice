@@ -2,22 +2,19 @@ const FALLBACK_STORAGE_KEY = 'delta-invoice-fallback-store'
 const FALLBACK_BACKUP_KEY = 'delta-invoice-fallback-backup'
 
 const defaultSettings = {
-  companyName: 'EXTREME EMBROIDERIES',
-  address1: '8-68/7 A1, VIGNESHWARA NAGAR,',
-  address2: 'POOLUVAPATTI POST,',
-  city: 'Tiruppur',
-  pincode: '641 602',
-  gstin: '33XXXXXXXXXX',
-  stateName: 'Tamil Nadu',
-  stateCode: '33',
-  email: 'info@example.com',
+  companyName: '',
+  address1: '',
+  address2: '',
+  city: '',
+  pincode: '',
+  gstin: '',
+  stateName: '',
+  email: '',
   phone: '',
-  bankName: 'State Bank of India',
-  accountNumber: '1234567890',
-  branchIfsc: 'SBI0001234',
-  invoicePrefix: 'INV',
-  invoiceStart: 160,
-  invoiceFormat: 'INV-{year}-{seq}',
+  bankName: '',
+  accountNumber: '',
+  branchIfsc: '',
+  hsnSac: '',
 }
 
 const createFallbackStore = () => ({
@@ -25,7 +22,7 @@ const createFallbackStore = () => ({
   customers: [],
   products: [],
   invoices: [],
-  sequence: defaultSettings.invoiceStart - 1,
+  sequence: 0,
 })
 
 const readFallbackStore = () => {
@@ -34,13 +31,15 @@ const readFallbackStore = () => {
     if (!raw) {
       return createFallbackStore()
     }
+
     const parsed = JSON.parse(raw)
+
     return {
       settings: { ...defaultSettings, ...(parsed.settings || {}) },
       customers: Array.isArray(parsed.customers) ? parsed.customers : [],
       products: Array.isArray(parsed.products) ? parsed.products : [],
       invoices: Array.isArray(parsed.invoices) ? parsed.invoices : [],
-      sequence: Number(parsed.sequence || defaultSettings.invoiceStart - 1),
+      sequence: Number(parsed.sequence || 0),
     }
   } catch {
     return createFallbackStore()
@@ -52,17 +51,9 @@ const writeFallbackStore = (store) => {
   return store
 }
 
-const getNextFallbackSequence = (store) => {
-  return Number(store.sequence || defaultSettings.invoiceStart - 1) + 1
-}
+const getNextFallbackSequence = (store) => Number(store.sequence || 0) + 1
 
-const formatFallbackInvoiceNumber = (store, nextSequence) => {
-  const settings = store.settings || defaultSettings
-  return settings.invoiceFormat
-    .replace('{year}', String(new Date().getFullYear()))
-    .replace('{seq}', String(nextSequence).padStart(3, '0'))
-    .replace('{prefix}', settings.invoicePrefix || 'INV')
-}
+const formatFallbackInvoiceNumber = (nextSequence) => `DD/${nextSequence}`
 
 const downloadJsonFile = (filename, payload) => {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
@@ -84,7 +75,11 @@ const fallbackInvoke = async (channel, payload) => {
       return store.settings
 
     case 'app:saveSettings': {
-      store.settings = { ...store.settings, ...(payload || {}) }
+      store.settings = {
+        ...defaultSettings,
+        ...store.settings,
+        ...(payload || {}),
+      }
       writeFallbackStore(store)
       return store.settings
     }
@@ -95,16 +90,23 @@ const fallbackInvoke = async (channel, payload) => {
     case 'app:saveCustomer': {
       const nextId = () => store.customers.reduce((max, item) => Math.max(max, Number(item.id || 0)), 0) + 1
       const customer = payload || {}
-      if (customer.id) {
-        const index = store.customers.findIndex((item) => Number(item.id) === Number(customer.id))
+      const normalized = {
+        ...customer,
+      }
+
+      if (normalized.id) {
+        const index = store.customers.findIndex((item) => Number(item.id) === Number(normalized.id))
         if (index !== -1) {
-          store.customers[index] = { ...store.customers[index], ...customer }
+          store.customers[index] = { ...store.customers[index], ...normalized }
         }
       } else {
-        store.customers.push({ ...customer, id: nextId() })
+        store.customers.push({ ...normalized, id: nextId() })
       }
+
       writeFallbackStore(store)
-      return customer.id ? store.customers.find((item) => Number(item.id) === Number(customer.id)) : store.customers[store.customers.length - 1]
+      return normalized.id
+        ? store.customers.find((item) => Number(item.id) === Number(normalized.id))
+        : store.customers[store.customers.length - 1]
     }
 
     case 'app:deleteCustomer': {
@@ -119,16 +121,26 @@ const fallbackInvoke = async (channel, payload) => {
     case 'app:saveProduct': {
       const nextId = () => store.products.reduce((max, item) => Math.max(max, Number(item.id || 0)), 0) + 1
       const product = payload || {}
-      if (product.id) {
-        const index = store.products.findIndex((item) => Number(item.id) === Number(product.id))
+      const normalized = {
+        ...product,
+        hsn: '',
+        gstRate: 0,
+        unit: '',
+      }
+
+      if (normalized.id) {
+        const index = store.products.findIndex((item) => Number(item.id) === Number(normalized.id))
         if (index !== -1) {
-          store.products[index] = { ...store.products[index], ...product }
+          store.products[index] = { ...store.products[index], ...normalized }
         }
       } else {
-        store.products.push({ ...product, id: nextId() })
+        store.products.push({ ...normalized, id: nextId() })
       }
+
       writeFallbackStore(store)
-      return product.id ? store.products.find((item) => Number(item.id) === Number(product.id)) : store.products[store.products.length - 1]
+      return normalized.id
+        ? store.products.find((item) => Number(item.id) === Number(normalized.id))
+        : store.products[store.products.length - 1]
     }
 
     case 'app:deleteProduct': {
@@ -159,7 +171,7 @@ const fallbackInvoke = async (channel, payload) => {
         ...existing,
         ...invoice,
         id: existing?.id || (store.invoices.reduce((max, item) => Math.max(max, Number(item.id || 0)), 0) + 1),
-        invoiceNumber: invoice.invoiceNumber || formatFallbackInvoiceNumber(store, nextSequence),
+        invoiceNumber: invoice.invoiceNumber || formatFallbackInvoiceNumber(nextSequence),
         createdAt: existing?.createdAt || now,
         updatedAt: now,
         items: (invoice.items || []).map((item, index) => ({
@@ -188,7 +200,7 @@ const fallbackInvoke = async (channel, payload) => {
     case 'app:getNextInvoiceNumber': {
       const nextSequence = getNextFallbackSequence(store)
       return {
-        invoiceNumber: formatFallbackInvoiceNumber(store, nextSequence),
+        invoiceNumber: formatFallbackInvoiceNumber(nextSequence),
         nextSequence,
       }
     }
@@ -212,13 +224,14 @@ const fallbackInvoke = async (channel, payload) => {
       if (!backup) {
         return { success: false, error: 'No backup found in browser storage' }
       }
+
       const parsed = JSON.parse(backup)
       writeFallbackStore({
         settings: { ...defaultSettings, ...(parsed.settings || {}) },
         customers: Array.isArray(parsed.customers) ? parsed.customers : [],
         products: Array.isArray(parsed.products) ? parsed.products : [],
         invoices: Array.isArray(parsed.invoices) ? parsed.invoices : [],
-        sequence: Number(parsed.sequence || defaultSettings.invoiceStart - 1),
+        sequence: Number(parsed.sequence || 0),
       })
       return { success: true }
     }

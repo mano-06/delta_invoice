@@ -12,7 +12,7 @@
     "package": "npm run electron:build"
   },
   "dependencies": {
-    "better-sqlite3": "^8.4.0",
+    "better-sqlite3": "8.4.0",
     "dayjs": "^1.11.9",
     "html2canvas": "^1.4.1",
     "jspdf": "^2.5.1",
@@ -49,9 +49,12 @@
       {
         "from": "electron",
         "to": "electron",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
+    "asar": false,
     "nsis": {
       "oneClick": false,
       "perMachine": false,
@@ -59,7 +62,11 @@
       "allowToChangeInstallationDirectory": true
     },
     "win": {
-      "target": ["nsis"]
+      "target": [
+        "nsis"
+      ],
+      "sign": "./scripts/disable-signing.js",
+      "signAndEditExecutable": false
     }
   }
 }

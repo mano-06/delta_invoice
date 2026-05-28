@@ -3,6 +3,16 @@ import { useForm } from 'react-hook-form'
 import toast from 'react-hot-toast'
 import { api } from '../services/api'
 
+const splitBillingAddress = (value = '') => {
+  const lines = String(value || '').split(/\r?\n/).map((line) => line.trim())
+  return {
+    billingAddressLine1: lines[0] || '',
+    billingAddressLine2: lines.slice(1).join(' ').trim(),
+  }
+}
+
+const joinBillingAddress = (line1 = '', line2 = '') => [line1.trim(), line2.trim()].filter(Boolean).join('\n')
+
 function Customers() {
   const [customers, setCustomers] = useState([])
   const [editing, setEditing] = useState(null)
@@ -24,10 +34,11 @@ function Customers() {
   const handleEdit = (customer) => {
     setEditing(customer)
     setValue('name', customer.name)
-    setValue('billingAddress', customer.billingAddress)
+    const { billingAddressLine1, billingAddressLine2 } = splitBillingAddress(customer.billingAddress)
+    setValue('billingAddressLine1', billingAddressLine1)
+    setValue('billingAddressLine2', billingAddressLine2)
     setValue('gstin', customer.gstin)
     setValue('state', customer.state)
-    setValue('stateCode', customer.stateCode)
     setValue('phone', customer.phone)
     setValue('email', customer.email)
   }
@@ -48,6 +59,7 @@ function Customers() {
   const onSubmit = async (data) => {
     const payload = {
       ...data,
+      billingAddress: joinBillingAddress(data.billingAddressLine1, data.billingAddressLine2),
       id: editing?.id,
       createdAt: new Date().toISOString(),
     }
@@ -77,9 +89,15 @@ function Customers() {
               <label className="block text-sm font-medium text-slate-700">Customer Name</label>
               <input {...register('name')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700">Address</label>
-              <textarea {...register('billingAddress')} rows={3} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Address Line 1</label>
+                <input {...register('billingAddressLine1')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Address Line 2</label>
+                <input {...register('billingAddressLine2')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
+              </div>
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
               <div>
@@ -93,17 +111,13 @@ function Customers() {
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-slate-700">State Code</label>
-                <input {...register('stateCode')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
-              </div>
-              <div>
                 <label className="block text-sm font-medium text-slate-700">Phone</label>
                 <input {...register('phone')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
               </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700">Email</label>
-              <input {...register('email')} type="email" className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Email</label>
+                <input {...register('email')} type="email" className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
+              </div>
             </div>
             <div className="flex flex-wrap gap-3">
               <button type="submit" className="rounded-full bg-slate-900 px-6 py-3 text-sm font-semibold text-white hover:bg-slate-800">Save Customer</button>
@@ -124,7 +138,12 @@ function Customers() {
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <p className="font-semibold text-slate-900">{customer.name}</p>
-                    <p className="text-sm text-slate-500">{customer.billingAddress}</p>
+                    <div className="text-sm text-slate-500">
+                      <div>{splitBillingAddress(customer.billingAddress).billingAddressLine1}</div>
+                      {splitBillingAddress(customer.billingAddress).billingAddressLine2 && (
+                        <div>{splitBillingAddress(customer.billingAddress).billingAddressLine2}</div>
+                      )}
+                    </div>
                     <p className="text-sm text-slate-500">GSTIN: {customer.gstin}</p>
                   </div>
                   <div className="flex flex-wrap gap-2 text-sm">

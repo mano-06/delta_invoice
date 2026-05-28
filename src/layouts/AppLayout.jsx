@@ -51,7 +51,7 @@ function AppLayout({ children }) {
           <header className="mb-6 flex items-start justify-between gap-4">
             <div>
               <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Company</p>
-              <h2 className="text-2xl font-semibold text-slate-900">{settings?.companyName || 'EXTREME EMBROIDERIES'}</h2>
+              <h2 className="text-2xl font-semibold text-slate-900">{settings?.companyName || ''}</h2>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Current</p>
