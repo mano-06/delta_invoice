@@ -26,7 +26,13 @@ export function AppProvider({ children }) {
     try {
       const response = await api.getSettings()
       if (response?.success === false) { throw new Error(response.error) }
-      setSettings(unwrapResponse(response))
+      const fetched = unwrapResponse(response)
+      // Merge logo from localStorage if not present
+      const storedLogo = window.localStorage.getItem('companyLogo')
+      if (storedLogo && !fetched.companyLogo) {
+        fetched.companyLogo = storedLogo
+      }
+      setSettings(fetched)
     } catch (error) {
       toast.error('Unable to load settings')
     }

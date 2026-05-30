@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Jost:wght@400;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -31,8 +32,9 @@ input, select, textarea, button {
   border: 1px solid #111827 !important;
   border-radius: 0 !important;
   box-shadow: none !important;
-  font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif !important;
+  font-family: 'Fututa Cyrillic', 'Futura Cyrillic', 'Futura-Cyrillic', 'Futura PT', 'Futura', 'Jost', sans-serif !important;
   font-size: 10.5pt !important;
+  letter-spacing: -0.015em !important;
   line-height: 1.35 !important;
   box-sizing: border-box !important;
 }

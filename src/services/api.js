@@ -11,6 +11,7 @@ const defaultSettings = {
   stateName: '',
   email: '',
   phone: '',
+  companyLogo: '',
   bankName: '',
   accountNumber: '',
   branchIfsc: '',

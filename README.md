@@ -71,3 +71,8 @@ npm run electron:dev
 ```
 
 Then create invoices, save customers/products, generate PDF, and print invoices fully offline.
+
+## Recreate the portable ZIP from the updated packaged output
+
+$source = 'dist\win-unpacked'; $zip = 'dist\Delta Invoice Portable.zip'; $tempCopy = 'C:\temp\delta-inv-portable-copy'; if (Test-Path $zip) { Remove-Item -Force $zip }; if (Test-Path $tempCopy) { Remove-Item -Recurse -Force $tempCopy }; New-Item -ItemType Directory -Path $tempCopy | Out-Null; Copy-Item -Recurse -Force "$source\*" $tempCopy; Compress-Archive -Path "$tempCopy\*" -DestinationPath $zip -Force; if (Test-Path $zip) { Write-Host "ZIP_CREATED:$zip" }
+
