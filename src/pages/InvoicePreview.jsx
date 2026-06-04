@@ -430,7 +430,7 @@ function InvoicePreview() {
             fontFamily: "'Fututa Cyrillic', 'Futura Cyrillic', 'Futura-Cyrillic', 'Futura PT', 'Futura', 'Jost', sans-serif",
             fontSize: '9px',
             color: '#000',
-            fontWeight: '500',
+            fontWeight: '400',
             letterSpacing: '-0.015em',
             width: '210mm',
             minHeight: '297mm',
@@ -478,8 +478,8 @@ function InvoicePreview() {
 
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '46% 54%' }}>
-                <div style={{ padding: '8px 6px', fontSize: '13px', borderRight: '1px solid #000', fontWeight: '500' }}>{formValues.invoiceNumber}</div>
-                <div style={{ padding: '8px 6px', fontSize: '13px', fontWeight: '500' }}>{formValues.invoiceDate}</div>
+                <div style={{ padding: '8px 6px', fontSize: '13px', borderRight: '1px solid #000', fontWeight: '400' }}>{formValues.invoiceNumber}</div>
+                <div style={{ padding: '8px 6px', fontSize: '13px', fontWeight: '400' }}>{formValues.invoiceDate}</div>
 
               </div>
             </div>
@@ -537,8 +537,7 @@ function InvoicePreview() {
                               return (
                                 <tr key={index}>
                                   {cells.map((cell, ci) => (
-                                    <td key={ci} style={{ padding: '3px 5px', fontSize: '13px', fontWeight: '500', textAlign: cell.align, verticalAlign: 'top', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cell.val}</td>
-                                  ))}
+                                        <td key={ci} style={{ padding: '3px 5px', fontSize: '13px', fontWeight: '400', textAlign: cell.align, verticalAlign: 'top', whiteSpace: 'normal', overflowWrap: 'break-word', wordBreak: 'break-word' }}>{cell.val}</td>                                  ))}
                                 </tr>
                               )
                             })}
@@ -550,27 +549,27 @@ function InvoicePreview() {
 
                   {/* Taxable subtotal */}
                   <tr style={{ borderTop: '1px solid #000' }}>
-                    <td colSpan={6} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '500', fontSize: '13px' }}></td>
-                    <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '500', fontSize: '13px', borderLeft: '1px solid #000' }}>
+                    <td colSpan={6} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '400', fontSize: '13px' }}></td>
+                    <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '400', fontSize: '13px', borderLeft: '1px solid #000' }}>
                       {Number(totals.taxableValue).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                   </tr>
                   <tr>
-                    <td colSpan={6} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '500', fontSize: '13px' }}>CGST 2.5%</td>
-                    <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '500', fontSize: '13px', borderLeft: '1px solid #000' }}>
+                    <td colSpan={6} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '400', fontSize: '13px' }}>CGST 2.5%</td>
+                    <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '400', fontSize: '13px', borderLeft: '1px solid #000' }}>
                       {Number(totals.cgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                   </tr>
                   <tr>
-                    <td colSpan={6} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '500', fontSize: '13px' }}>SGST 2.5%</td>
-                    <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '500', fontSize: '13px', borderLeft: '1px solid #000' }}>
+                    <td colSpan={6} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '400', fontSize: '13px' }}>SGST 2.5%</td>
+                    <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '400', fontSize: '13px', borderLeft: '1px solid #000' }}>
                       {Number(totals.sgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                   </tr>
                   {totals.roundOff !== 0 && (
                     <tr>
-                      <td colSpan={6} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '500', fontSize: '13px' }}>ROUND OFF</td>
-                      <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '500', fontSize: '13px', borderLeft: '1px solid #000' }}>
+                      <td colSpan={6} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '400', fontSize: '13px' }}>ROUND OFF</td>
+                      <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '400', fontSize: '13px', borderLeft: '1px solid #000' }}>
                         {totals.roundOff < 0 ? '(-)' : '(+)'}{Math.abs(totals.roundOff).toFixed(2)}
                       </td>
                     </tr>
@@ -591,7 +590,7 @@ function InvoicePreview() {
                     <td colSpan={7} style={{ padding: '4px 8px', lineHeight: '1' }}>
                       <span style={{ fontWeight: 'bold', fontSize: '13px' }}>Amount Chargeable (in words)</span>
                       <span style={{ float: 'right', fontSize: '13px' }}>E. &amp; O.E</span>
-                      <div style={{ marginTop: '3px', fontWeight: '500', fontSize: '13px' }}>{toIndianCurrency(totals.finalAmount)}</div>
+                      <div style={{ marginTop: '3px', fontWeight: '400', fontSize: '13px' }}>{toIndianCurrency(totals.finalAmount)}</div>
                     </td>
                   </tr>
 
@@ -631,25 +630,25 @@ function InvoicePreview() {
                               const sgst = Number((taxable * 0.025).toFixed(2))
                               return (
                                 <tr key={hsn} style={{ borderBottom: '1px solid #000' }}>
-                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '500', textAlign: 'left', borderRight: '1px solid #000' }}>{hsn}</td>
-                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '500', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(taxable).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '500', textAlign: 'right', borderRight: '1px solid #000' }}>2.50%</td>
-                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '500', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(cgst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '500', textAlign: 'right', borderRight: '1px solid #000' }}>2.50%</td>
-                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '500', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(sgst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '500', textAlign: 'right' }}>{Number(cgst + sgst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '400', textAlign: 'left', borderRight: '1px solid #000' }}>{hsn}</td>
+                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '400', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(taxable).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '400', textAlign: 'right', borderRight: '1px solid #000' }}>2.50%</td>
+                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '400', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(cgst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '400', textAlign: 'right', borderRight: '1px solid #000' }}>2.50%</td>
+                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '400', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(sgst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '400', textAlign: 'right' }}>{Number(cgst + sgst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                 </tr>
                               )
                             })
                           })()}
                           <tr style={{ borderTop: '1px solid #000' }}>
-                            <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '500', textAlign: 'left', borderRight: '1px solid #000' }}>Total</td>
-                            <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '500', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(totals.taxableValue).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '400', textAlign: 'left', borderRight: '1px solid #000' }}>Total</td>
+                            <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '400', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(totals.taxableValue).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                             <td style={{ padding: '2px 5px', borderRight: '1px solid #000' }}></td>
-                            <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '500', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(totals.cgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '400', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(totals.cgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                             <td style={{ padding: '2px 5px', borderRight: '1px solid #000' }}></td>
-                            <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '500', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(totals.sgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '500', textAlign: 'right' }}>{Number(totals.cgstAmount + totals.sgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '400', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(totals.sgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '400', textAlign: 'right' }}>{Number(totals.cgstAmount + totals.sgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                           </tr>
                         </tbody>
                       </table>
@@ -658,7 +657,7 @@ function InvoicePreview() {
 
                   {/* Tax amount in words */}
                   <tr style={{ borderTop: '1px solid #000' }}>
-                    <td colSpan={7} style={{ padding: '3px 8px', fontSize: '13px', fontWeight: '500' }}>
+                    <td colSpan={7} style={{ padding: '3px 8px', fontSize: '13px', fontWeight: '400' }}>
                       <strong>Tax Amount (in words) :</strong> {toIndianCurrency(totals.cgstAmount + totals.sgstAmount)}
                     </td>
                   </tr>
@@ -672,15 +671,15 @@ function InvoicePreview() {
                           <div style={{ fontSize: '13px', lineHeight: '1.5' }}>
                             <div style={{ display: 'flex' }}>
                               <span style={{ width: '80px', fontWeight: 'bold' }}>Bank Name</span>
-                              <span style={{ fontWeight: '500' }}>: {settings?.bankName || ''}</span>
+                              <span style={{ fontWeight: '400' }}>: {settings?.bankName || ''}</span>
                             </div>
                             <div style={{ display: 'flex' }}>
                               <span style={{ width: '80px', fontWeight: 'bold' }}>A/c No.</span>
-                              <span style={{ fontWeight: '500' }}>: {settings?.accountNumber || ''}</span>
+                              <span style={{ fontWeight: '400' }}>: {settings?.accountNumber || ''}</span>
                             </div>
                             <div style={{ display: 'flex' }}>
                               <span style={{ width: '80px', fontWeight: 'bold' }}>IFS Code</span>
-                              <span style={{ fontWeight: '500' }}>: {settings?.branchIfsc || ''}</span>
+                              <span style={{ fontWeight: '400' }}>: {settings?.branchIfsc || ''}</span>
                             </div>
                           </div>
 
@@ -699,7 +698,7 @@ function InvoicePreview() {
 
           <div style={{ padding: '2px 5px', textAlign: 'center' }}>
             <div style={{ textTransform: 'uppercase', fontSize: '13px', fontWeight: 'bold' }}>SUBJECT TO TIRUPPUR JURISDICTION</div>
-            <div style={{ marginTop: '2px', fontSize: '12px', fontWeight: '500' }}>This is a Computer Generated Invoice</div>
+            <div style={{ marginTop: '2px', fontSize: '12px', fontWeight: '400' }}>This is a Computer Generated Invoice</div>
           </div>
         </div>
       </section>
