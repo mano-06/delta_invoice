@@ -26,7 +26,7 @@ function CreateInvoice() {
   const { register, control, handleSubmit, watch, setValue, reset } = useForm({
     defaultValues: {
       invoiceNumber: '',
-      invoiceDate: new Date().toISOString().slice(0, 10),
+      invoiceDate: new Date().toLocaleDateString('en-GB').replace(/\//g, '-'),
       deliveryNote: '',
       paymentTerms: '',
       referenceNo: '',
@@ -152,20 +152,63 @@ function CreateInvoice() {
     setValue('buyerState', customer.state)
   }
 
-  const handleProductSelect = (index, productId) => {
-    setValue(`items.${index}.productId`, productId || '')
+  const findProductByName = (name) => {
+    if (!name) return null
+    const normalized = String(name).trim().toLowerCase()
+    return products.find((item) => String(item.name || '').trim().toLowerCase() === normalized)
+  }
 
-    if (!productId) {
+  const saveItemProduct = async (index, createIfMissing = false) => {
+    const item = items?.[index] || {}
+    const description = String(item.description || '').trim()
+    if (!description) return null
+
+    const existing = findProductByName(description)
+    if (existing) {
+      setValue(`items.${index}.productId`, existing.id)
+      setValue(`items.${index}.hsn`, existing.hsn || settings?.hsnSac || '')
+      setValue(`items.${index}.rate`, Number(existing.rate || 0))
+      setValue(`items.${index}.unit`, existing.unit || 'Pcs')
+      setValue(`items.${index}.taxRate`, Number(existing.gstRate || 5))
+      return existing
+    }
+
+    if (!createIfMissing) {
+      return null
+    }
+
+    const newProduct = {
+      name: description,
+      hsn: item.hsn || settings?.hsnSac || '',
+      rate: Number(item.rate || 0),
+      gstRate: Number(item.taxRate || 5),
+      unit: item.unit || 'Pcs',
+    }
+
+    const response = await api.saveProduct(newProduct)
+    if (!response || !response.id) {
+      return null
+    }
+
+    await loadProducts()
+    setValue(`items.${index}.productId`, response.id)
+    return response
+  }
+
+  const handleItemDescriptionChange = (index, value) => {
+    setValue(`items.${index}.description`, value)
+
+    const product = findProductByName(value)
+    if (product) {
+      setValue(`items.${index}.productId`, product.id)
+      setValue(`items.${index}.hsn`, product.hsn || settings?.hsnSac || '')
+      setValue(`items.${index}.rate`, Number(product.rate || 0))
+      setValue(`items.${index}.unit`, product.unit || 'Pcs')
+      setValue(`items.${index}.taxRate`, Number(product.gstRate || 5))
       return
     }
 
-    const product = products.find((item) => item.id === Number(productId))
-    if (!product) return
-    setValue(`items.${index}.description`, product.name || '')
-    setValue(`items.${index}.hsn`, product.hsn || settings?.hsnSac || '')
-    setValue(`items.${index}.rate`, Number(product.rate || 0))
-    setValue(`items.${index}.unit`, product.unit || 'Pcs')
-    setValue(`items.${index}.taxRate`, Number(product.gstRate || 5))
+    setValue(`items.${index}.productId`, '')
   }
 
   const buildDraftInvoice = () => ({
@@ -178,21 +221,14 @@ function CreateInvoice() {
       gstin: settings?.gstin || '',
       stateName: settings?.stateName || '',
       email: settings?.email || '',
+      bankName: settings?.bankName || '',
+      accountNumber: settings?.accountNumber || '',
+      branchIfsc: settings?.branchIfsc || '',
+      companyLogo: settings?.companyLogo || '',
     },
     invoice: {
       invoiceNumber: formValues.invoiceNumber || '',
       invoiceDate: formValues.invoiceDate || '',
-      deliveryNote: formValues.deliveryNote || '',
-      paymentTerms: formValues.paymentTerms || '',
-      referenceNo: formValues.referenceNo || '',
-      referenceDate: formValues.referenceDate || '',
-      orderNo: formValues.orderNo || '',
-      orderDate: formValues.orderDate || '',
-      dispatchDocNo: formValues.dispatchDocNo || '',
-      dispatchDate: formValues.dispatchDate || '',
-      transporter: formValues.transporter || '',
-      destination: formValues.destination || '',
-      termsOfDelivery: formValues.termsOfDelivery || '',
       buyerName: formValues.buyerName || '',
       buyerAddress: joinBuyerAddress(formValues.buyerAddressLine1, formValues.buyerAddressLine2),
       buyerGstin: formValues.buyerGstin || '',
@@ -209,16 +245,19 @@ function CreateInvoice() {
       amount: Number((Number(item.quantity || 0) * Number(item.rate || 0)).toFixed(2)),
     })),
     totals: {
-      taxableValue: formatCurrency(totals.taxableValue),
-      cgstAmount: formatCurrency(totals.cgstAmount),
-      sgstAmount: formatCurrency(totals.sgstAmount),
-      totalAmount: formatCurrency(totals.finalAmount),
+      taxableValue: totals.taxableValue,
+      cgstAmount: totals.cgstAmount,
+      sgstAmount: totals.sgstAmount,
+      totalAmount: totals.finalAmount,
       totalQuantity: totals.totalQuantity,
       amountWords: toIndianCurrency(totals.finalAmount),
+      taxAmountWords: toIndianCurrency(totals.cgstAmount + totals.sgstAmount),
     },
   })
 
   const onSubmit = async (data) => {
+    await Promise.all((items || []).map((_, index) => saveItemProduct(index, true)))
+
     const payload = {
       ...data,
       buyerAddress: joinBuyerAddress(data.buyerAddressLine1, data.buyerAddressLine2),
@@ -379,49 +418,40 @@ function CreateInvoice() {
                     <tr key={field.id}>
                       <td className="whitespace-nowrap px-4 py-3 text-slate-600">{index + 1}</td>
                       <td className="px-4 py-3">
-                        <div className="flex flex-col gap-2">
-                          <select
-                            value={currentItem.productId || ''}
-                            onChange={(event) => handleProductSelect(index, event.target.value)}
-                            onKeyDown={handleRowKeyDown}
-                            className="rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
-                          >
-                            <option value="">Select product</option>
-                            {products.map((product) => (
-                              <option key={product.id} value={product.id}>{product.name}</option>
-                            ))}
-                          </select>
-                          <input
-                            type="text"
-                            value={currentItem.description || ''}
-                            onChange={(event) => setValue(`items.${index}.description`, event.target.value)}
-                            ref={(element) => {
-                              descriptionRefs.current[index] = element
-                            }}
-                            onKeyDown={handleRowKeyDown}
-                            className="min-w-[220px] w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
-                            placeholder="Description"
-                          />
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
                         <input
-                          type="number"
-                          min="0"
-                          step="1"
-                          {...register(`items.${index}.quantity`, { valueAsNumber: true })}
+                          type="text"
+                          list={`product-search-${index}`}
+                          value={currentItem.description || ''}
+                          onChange={(event) => handleItemDescriptionChange(index, event.target.value)}
+                          ref={(element) => {
+                            descriptionRefs.current[index] = element
+                          }}
                           onKeyDown={handleRowKeyDown}
-                          className="w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
+                          className="min-w-[220px] w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
+                          placeholder="Search or type product description"
                         />
+                        <datalist id={`product-search-${index}`}>
+                          {products.map((product) => (
+                            <option key={product.id} value={product.name} />
+                          ))}
+                        </datalist>
+                      </td>
+                      <td className="px-4 py-3">
+                        <input
+                              type="number"
+                              min="0"
+                              {...register(`items.${index}.quantity`, { valueAsNumber: true })}
+                              onKeyDown={handleRowKeyDown}
+                              className="w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                            />
                       </td>
                       <td className="px-4 py-3">
                         <input
                           type="number"
                           min="0"
-                          step="0.01"
                           {...register(`items.${index}.rate`, { valueAsNumber: true })}
                           onKeyDown={handleRowKeyDown}
-                          className="w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
+                          className="w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                         />
                       </td>
                       <td className="px-4 py-3">
@@ -505,7 +535,7 @@ function CreateInvoice() {
             fontFamily: "'Fututa Cyrillic', 'Futura Cyrillic', 'Futura-Cyrillic', 'Futura PT', 'Futura', 'Jost', sans-serif",
             fontSize: '9px',
             color: '#000',
-            fontWeight: 'normal',
+            fontWeight: '500',
             letterSpacing: '-0.015em',
             width: '210mm',
             minHeight: '297mm',
@@ -553,8 +583,8 @@ function CreateInvoice() {
                 
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '45% 55%' }}>
-                <div style={{ padding: '4px 6px', fontSize: '12px', borderRight: '1px solid #000', fontWeight: 'normal' }}>{formValues.invoiceNumber}</div>
-                <div style={{ padding: '4px 6px', fontSize: '12px', fontWeight: 'normal'}}>{formValues.invoiceDate}</div>
+                <div style={{ padding: '4px 6px', fontSize: '12px', borderRight: '1px solid #000', fontWeight: '500' }}>{formValues.invoiceNumber}</div>
+                <div style={{ padding: '4px 6px', fontSize: '12px', fontWeight: '500'}}>{formValues.invoiceDate}</div>
                 
               </div>
             </div>
@@ -581,12 +611,12 @@ function CreateInvoice() {
                 <tbody>
                   {/* Fixed-height body with always-visible column separators */}
                   <tr>
-                    <td colSpan={7} style={{ padding: 0, height: '455px', verticalAlign: 'top', border: 0, position: 'relative' ,lineHeight:'1'}}>
+                    <td colSpan={7} style={{ padding: 0, height: '400px', verticalAlign: 'top', border: 0, position: 'relative' ,lineHeight:'1'}}>
                       {/* Column separator layer — always visible regardless of item count */}
                       <table style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                         {colGroup}
                         <tbody>
-                          <tr style={{ height: '455px' }}>
+                          <tr style={{ height: '400px' }}>
                             {cols.map((_, i) => (
                               <td key={i} style={{ borderRight: cellBorder(i), padding: 0 }}></td>
                             ))}
@@ -594,7 +624,7 @@ function CreateInvoice() {
                         </tbody>
                       </table>
                       {/* Item rows */}
-                      <div style={{ position: 'relative', overflow: 'hidden', height: '455px' }}>
+                      <div style={{ position: 'relative', overflow: 'hidden', height: '400px' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           {colGroup}
                           <tbody>
@@ -612,7 +642,7 @@ function CreateInvoice() {
                               return (
                                 <tr key={index}>
                                   {cells.map((cell, ci) => (
-                                    <td key={ci} style={{ padding: '3px 5px', fontSize: '13px', fontWeight: 'normal', textAlign: cell.align, verticalAlign: 'top', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cell.val}</td>
+                                    <td key={ci} style={{ padding: '3px 5px', fontSize: '13px', fontWeight: '500', textAlign: cell.align, verticalAlign: 'top', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cell.val}</td>
                                   ))}
                                 </tr>
                               )
@@ -625,27 +655,27 @@ function CreateInvoice() {
 
                   {/* Taxable subtotal */}
                   <tr style={{ borderTop: '1px solid #000' }}>
-                    <td colSpan={6} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: 'normal', fontSize: '12px' }}></td>
-                    <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: 'normal', fontSize: '12px', borderLeft: '1px solid #000' }}>
+                    <td colSpan={6} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '500', fontSize: '12px' }}></td>
+                    <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '500', fontSize: '12px', borderLeft: '1px solid #000' }}>
                       {Number(totals.taxableValue).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                   </tr>
                   <tr>
-                    <td colSpan={6} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: 'normal', fontSize: '12px' }}>CGST 2.5%</td>
-                    <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: 'normal', fontSize: '12px', borderLeft: '1px solid #000' }}>
+                    <td colSpan={6} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '500', fontSize: '12px' }}>CGST 2.5%</td>
+                    <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '500', fontSize: '12px', borderLeft: '1px solid #000' }}>
                       {Number(totals.cgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                   </tr>
                   <tr>
-                    <td colSpan={6} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: 'normal', fontSize: '12px' }}>SGST 2.5%</td>
-                    <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: 'normal', fontSize: '12px', borderLeft: '1px solid #000' }}>
+                    <td colSpan={6} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '500', fontSize: '12px' }}>SGST 2.5%</td>
+                    <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '500', fontSize: '12px', borderLeft: '1px solid #000' }}>
                       {Number(totals.sgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                   </tr>
                   {totals.roundOff !== 0 && (
                     <tr>
-                      <td colSpan={6} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: 'normal', fontSize: '12px' }}>ROUND OFF</td>
-                      <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: 'normal', fontSize: '12px', borderLeft: '1px solid #000' }}>
+                      <td colSpan={6} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '500', fontSize: '12px' }}>ROUND OFF</td>
+                      <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '500', fontSize: '12px', borderLeft: '1px solid #000' }}>
                         {totals.roundOff < 0 ? '(-)' : '(+)'}{Math.abs(totals.roundOff).toFixed(2)}
                       </td>
                     </tr>
@@ -657,7 +687,7 @@ function CreateInvoice() {
                     </td>
                     <td colSpan={2} style={{ padding: '3px 5px' }}></td>
                     <td style={{ padding: '3px 5px', textAlign: 'right', fontWeight: '700', fontSize: '12px', borderLeft: '1px solid #000' }}>
-                      ₹ {Number(totals.finalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      Rs. {Number(totals.finalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                   </tr>
 
@@ -666,7 +696,7 @@ function CreateInvoice() {
                     <td colSpan={7} style={{ padding: '4px 8px', lineHeight: '1' }}>
                       <span style={{ fontWeight: 'bold', fontSize: '12px' }}>Amount Chargeable (in words)</span>
                       <span style={{ float: 'right', fontSize: '12px' }}>E. &amp; O.E</span>
-                      <div style={{ marginTop: '3px', fontWeight: 'normal', fontSize: '12px' }}>{toIndianCurrency(totals.finalAmount)}</div>
+                      <div style={{ marginTop: '3px', fontWeight: '500', fontSize: '12px' }}>{toIndianCurrency(totals.finalAmount)}</div>
                     </td>
                   </tr>
 
@@ -706,25 +736,25 @@ function CreateInvoice() {
                               const sgst = Number((taxable * 0.025).toFixed(2))
                               return (
                                 <tr key={hsn} style={{ borderBottom: '1px solid #000' }}>
-                                  <td style={{ padding: '2px 5px', fontSize: '11px', fontWeight: 'normal', textAlign: 'left', borderRight: '1px solid #000' }}>{hsn}</td>
-                                  <td style={{ padding: '2px 5px', fontSize: '11px', fontWeight: 'normal', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(taxable).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                  <td style={{ padding: '2px 5px', fontSize: '11px', fontWeight: 'normal', textAlign: 'right', borderRight: '1px solid #000' }}>2.50%</td>
-                                  <td style={{ padding: '2px 5px', fontSize: '11px', fontWeight: 'normal', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(cgst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                  <td style={{ padding: '2px 5px', fontSize: '11px', fontWeight: 'normal', textAlign: 'right', borderRight: '1px solid #000' }}>2.50%</td>
-                                  <td style={{ padding: '2px 5px', fontSize: '11px', fontWeight: 'normal', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(sgst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                  <td style={{ padding: '2px 5px', fontSize: '11px', fontWeight: 'normal', textAlign: 'right' }}>{Number(cgst + sgst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                  <td style={{ padding: '2px 5px', fontSize: '11px', fontWeight: '500', textAlign: 'left', borderRight: '1px solid #000' }}>{hsn}</td>
+                                  <td style={{ padding: '2px 5px', fontSize: '11px', fontWeight: '500', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(taxable).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                  <td style={{ padding: '2px 5px', fontSize: '11px', fontWeight: '500', textAlign: 'right', borderRight: '1px solid #000' }}>2.50%</td>
+                                  <td style={{ padding: '2px 5px', fontSize: '11px', fontWeight: '500', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(cgst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                  <td style={{ padding: '2px 5px', fontSize: '11px', fontWeight: '500', textAlign: 'right', borderRight: '1px solid #000' }}>2.50%</td>
+                                  <td style={{ padding: '2px 5px', fontSize: '11px', fontWeight: '500', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(sgst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                  <td style={{ padding: '2px 5px', fontSize: '11px', fontWeight: '500', textAlign: 'right' }}>{Number(cgst + sgst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                 </tr>
                               )
                             })
                           })()}
                           <tr style={{ borderTop: '1px solid #000' }}>
-                            <td style={{ padding: '2px 5px', fontSize: '11px', fontWeight: 'normal', textAlign: 'left', borderRight: '1px solid #000' }}>Total</td>
-                            <td style={{ padding: '2px 5px', fontSize: '11px', fontWeight: 'normal', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(totals.taxableValue).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td style={{ padding: '2px 5px', fontSize: '11px', fontWeight: '500', textAlign: 'left', borderRight: '1px solid #000' }}>Total</td>
+                            <td style={{ padding: '2px 5px', fontSize: '11px', fontWeight: '500', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(totals.taxableValue).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                             <td style={{ padding: '2px 5px', borderRight: '1px solid #000' }}></td>
-                            <td style={{ padding: '2px 5px', fontSize: '11px', fontWeight: 'normal', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(totals.cgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td style={{ padding: '2px 5px', fontSize: '11px', fontWeight: '500', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(totals.cgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                             <td style={{ padding: '2px 5px', borderRight: '1px solid #000' }}></td>
-                            <td style={{ padding: '2px 5px', fontSize: '11px', fontWeight: 'normal', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(totals.sgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td style={{ padding: '2px 5px', fontSize: '11px', fontWeight: 'normal', textAlign: 'right' }}>{Number(totals.cgstAmount + totals.sgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td style={{ padding: '2px 5px', fontSize: '11px', fontWeight: '500', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(totals.sgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td style={{ padding: '2px 5px', fontSize: '11px', fontWeight: '500', textAlign: 'right' }}>{Number(totals.cgstAmount + totals.sgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                           </tr>
                         </tbody>
                       </table>
@@ -733,7 +763,7 @@ function CreateInvoice() {
 
                   {/* Tax amount in words */}
                   <tr style={{ borderTop: '1px solid #000' }}>
-                    <td colSpan={7} style={{ padding: '3px 8px', fontSize: '12px', fontWeight: 'normal' }}>
+                    <td colSpan={7} style={{ padding: '3px 8px', fontSize: '12px', fontWeight: '500' }}>
                       <strong>Tax Amount (in words) :</strong> {toIndianCurrency(totals.cgstAmount + totals.sgstAmount)}
                     </td>
                   </tr>
@@ -747,15 +777,15 @@ function CreateInvoice() {
                           <div style={{ fontSize: '12px', lineHeight: '1.5'}}>
                             <div style={{ display: 'flex' }}>
                               <span style={{ width: '80px',fontWeight: 'bold'  }}>Bank Name</span>
-                              <span style={{fontWeight:'normal'}}>: {settings?.bankName || ''}</span>
+                              <span style={{fontWeight:'500'}}>: {settings?.bankName || ''}</span>
                             </div>
                             <div style={{ display: 'flex' }}>
                               <span style={{ width: '80px',fontWeight: 'bold' }}>A/c No.</span>
-                              <span style={{fontWeight:'normal'}}>: {settings?.accountNumber || ''}</span>
+                              <span style={{fontWeight:'500'}}>: {settings?.accountNumber || ''}</span>
                             </div>
                             <div style={{ display: 'flex' }}>
                               <span style={{ width: '80px',fontWeight: 'bold' }}>IFS Code</span>
-                              <span style={{fontWeight:'normal'}}>: {settings?.branchIfsc || ''}</span>
+                              <span style={{fontWeight:'500'}}>: {settings?.branchIfsc || ''}</span>
                             </div>
                           </div>
                           
@@ -774,7 +804,7 @@ function CreateInvoice() {
 
           <div style={{ padding: '2px 5px', textAlign:'center'}}>
             <div style={{ textTransform: 'uppercase',fontSize: '13px',fontWeight: 'bold' }}>SUBJECT TO TIRUPPUR JURISDICTION</div>
-            <div style={{ marginTop: '2px', fontSize: '12px', fontWeight: 'normal' }}>This is a Computer Generated Invoice</div>
+            <div style={{ marginTop: '2px', fontSize: '12px', fontWeight: '500' }}>This is a Computer Generated Invoice</div>
           </div>
         </div>
       </section>

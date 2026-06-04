@@ -337,9 +337,15 @@ function getInvoiceById(id) {
 function getNextInvoiceNumber() {
   const sequence = db.prepare('SELECT lastSequence FROM invoice_sequence WHERE id = 1').get()
   const nextSequence = (sequence?.lastSequence || 0) + 1
+  if (nextSequence <= 99) {
+      return {
+        nextSequence,
+        invoiceNumber: `DD-${String(nextSequence).padStart(3, '0')}`
+      }
+  }
   return {
     nextSequence,
-    invoiceNumber: `DD/${nextSequence}`,
+    invoiceNumber: `DD-${nextSequence}`
   }
 }
 

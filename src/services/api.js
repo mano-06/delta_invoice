@@ -54,7 +54,12 @@ const writeFallbackStore = (store) => {
 
 const getNextFallbackSequence = (store) => Number(store.sequence || 0) + 1
 
-const formatFallbackInvoiceNumber = (nextSequence) => `DD/${nextSequence}`
+const formatFallbackInvoiceNumber = (nextSequence) => {
+  if (nextSequence <= 99) {
+    return `DD-${String(nextSequence).padStart(3, '0')}`
+  }
+  return `DD-${nextSequence}`
+}
 
 const downloadJsonFile = (filename, payload) => {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
