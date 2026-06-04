@@ -1,7 +1,11 @@
+import { useContext } from 'react'
 import toast from 'react-hot-toast'
 import { api } from '../services/api'
+import { AppContext } from '../context/AppContext'
 
 function BackupRestore() {
+  const { loadSettings, loadCustomers, loadProducts } = useContext(AppContext)
+
   const copyToClipboard = async (text) => {
     try {
       await navigator.clipboard.writeText(text)
@@ -26,6 +30,7 @@ function BackupRestore() {
       toast.error('Import cancelled or failed')
       return
     }
+    await Promise.all([loadSettings(), loadCustomers(), loadProducts()])
     toast.success('Database imported successfully')
   }
 
@@ -44,6 +49,7 @@ function BackupRestore() {
       toast.error('Restore cancelled or failed')
       return
     }
+    await Promise.all([loadSettings(), loadCustomers(), loadProducts()])
     toast.success('Backup JSON restored successfully')
   }
 

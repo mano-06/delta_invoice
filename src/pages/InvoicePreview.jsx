@@ -230,7 +230,7 @@ function InvoicePreview() {
     setIsEditing(false)
   }
 
-  const invoiceFilename = (suffix = 'DD') => `${formValues.invoiceNumber || invoice?.invoiceNumber || 'invoice'}_${suffix}.pdf`;
+  const invoiceFilename = (suffix = 'DD') => `${formValues.invoiceNumber || invoice?.invoiceNumber || 'invoice'}.pdf`;
 
   if (!invoice) {
     return (
