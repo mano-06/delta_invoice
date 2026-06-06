@@ -97,6 +97,7 @@ function buildInvoiceBody(payload, copyLabel = '') {
   const buyerAddressLine2 = escapeHtml(invoice.buyerAddressLine2 || invoice.buyerAddress?.split('\n')[1] || '')
 
   // ── Item rows ──
+  // ── Item rows ──
   const itemRows = items.map((item, index) => {
     const amount = Number(item.quantity || 0) * Number(item.rate || 0)
     return `
@@ -105,7 +106,6 @@ function buildInvoiceBody(payload, copyLabel = '') {
         <td style="padding:3px 5px;font-size:13px;font-weight:400;text-align:left;vertical-align:top;white-space:normal;overflow-wrap:break-word;word-break:break-word;">${escapeHtml(item.description || '')}</td>        <td style="padding:3px 5px;font-size:13px;font-weight:400;text-align:center;vertical-align:top;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(item.hsn || '')}</td>
         <td style="padding:3px 5px;font-size:13px;font-weight:400;text-align:right;vertical-align:top;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${item.quantity ? `${Number(item.quantity).toLocaleString('en-IN')} Pcs` : ''}</td>
         <td style="padding:3px 5px;font-size:13px;font-weight:400;text-align:right;vertical-align:top;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${item.rate ? Number(item.rate).toFixed(2) : ''}</td>
-        <td style="padding:3px 5px;font-size:13px;font-weight:400;text-align:center;vertical-align:top;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(item.unit || '')}</td>
         <td style="padding:3px 5px;font-size:13px;font-weight:400;text-align:right;vertical-align:top;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${amount ? Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>
       </tr>
     `
@@ -136,7 +136,7 @@ function buildInvoiceBody(payload, copyLabel = '') {
 
   const roundOffRow =  `
     <tr>
-      <td colspan="6" style="padding:2px 5px;text-align:right;font-weight:400;font-size:13px;">ROUND OFF</td>
+      <td colspan="5" style="padding:2px 5px;text-align:right;font-weight:400;font-size:13px;">ROUND OFF</td>
       <td style="padding:2px 5px;text-align:right;font-weight:400;font-size:13px;border-left:1px solid #000;">
         ${roundOff < 0 ? '(-)' : '(+)'}${Math.abs(roundOff).toFixed(2)}
       </td>
@@ -146,12 +146,11 @@ function buildInvoiceBody(payload, copyLabel = '') {
   const colGroupHtml = `
     <colgroup>
       <col style="width:6%"/>
-      <col style="width:37%"/>
+      <col style="width:45%"/>
+      <col style="width:11%"/>
+      <col style="width:13%"/>
       <col style="width:10%"/>
-      <col style="width:12%"/>
-      <col style="width:10%"/>
-      <col style="width:8%"/>
-      <col style="width:16%"/>
+      <col style="width:15%"/>
     </colgroup>
   `
 
@@ -172,9 +171,9 @@ function buildInvoiceBody(payload, copyLabel = '') {
         <div style="width:38%;padding:10px 10px 4px;text-align:left;font-size:13px;line-height:1.4;">
           ${settings.address1 ? `<div>${escapeHtml(settings.address1)}</div>` : ''}
           ${settings.address2 ? `<div>${escapeHtml(settings.address2)}</div>` : ''}
-          ${(settings.city || settings.pincode) ? `<div>${escapeHtml([settings.city, settings.pincode].filter(Boolean).join(' - '))}</div>` : ''}
-          ${settings.stateName ? `<div>State Name : ${escapeHtml(settings.stateName)}</div>` : ''}
+          ${(settings.stateName || settings.pincode) ? `<div>${settings.city}, ${escapeHtml([settings.stateName, settings.pincode].filter(Boolean).join(' - '))}</div>` : ''}
           ${settings.email ? `<div>E-Mail : ${escapeHtml(settings.email)}</div>` : ''}
+          ${(settings.phoneNumber || settings.phone) ? `<div>Mobile : ${escapeHtml(settings.phoneNumber || settings.phone)}</div>` : ''}
           ${settings.gstin ? `<div style="font-size:14px;">GSTIN/UIN : ${escapeHtml(settings.gstin)}</div>` : ''}
         </div>
       </div>
@@ -186,16 +185,16 @@ function buildInvoiceBody(payload, copyLabel = '') {
           <div style="font-weight:700;font-size:14px;">${escapeHtml(invoice.buyerName || '')}</div>
           <div style="font-size:13px;">${buyerAddressLine1}</div>
           ${buyerAddressLine2 ? `<div style="font-size:13px;">${buyerAddressLine2}</div>` : ''}
-          ${invoice.buyerState ? `<div style="font-size:13px;">State Name : ${escapeHtml(invoice.buyerState)}</div>` : ''}
+          ${invoice.buyerState ? `<div style="font-size:13px;">${escapeHtml(invoice.buyerState)}</div>` : ''}
           ${invoice.buyerGstin ? `<div style="font-size:14px;">GSTIN/UIN : ${escapeHtml(invoice.buyerGstin)}</div>` : ''}
         </div>
         <div style="width:45%;display:flex;flex-direction:column;">
           <div style="flex:1;padding:4px 6px;font-weight:bold;font-size:20px;text-align:center;margin-bottom:3px;margin-top:9px;vertical-align:middle;">TAX INVOICE</div>
-          <div style="display:grid;grid-template-columns:46% 54%;border-bottom:1px solid #000;border-top:1px solid #000;">
+          <div style="display:grid;grid-template-columns:44.5% 55.5%;border-bottom:1px solid #000;border-top:1px solid #000;">
             <div style="padding:8px 6px;font-weight:bold;font-size:13px;border-right:1px solid #000;">INVOICE NO.</div>
             <div style="padding:8px 6px;font-weight:bold;font-size:13px;">DATED</div>
           </div>
-          <div style="display:grid;grid-template-columns:46% 54%;">
+          <div style="display:grid;grid-template-columns:44.5% 55.5%;">
             <div style="padding:8px 6px;font-size:13px;border-right:1px solid #000;font-weight:400;">${escapeHtml(invoice.invoiceNumber || '')}</div>
             <div style="padding:8px 6px;font-size:13px;font-weight:400;">${escapeHtml(invoice.invoiceDate || '')}</div>
           </div>
@@ -211,8 +210,7 @@ function buildInvoiceBody(payload, copyLabel = '') {
             <th style="padding:4px 5px;font-weight:bold;font-size:13px;text-align:center;border-right:1px solid #000;border-bottom:1px solid #000;white-space:nowrap;">Description of Goods</th>
             <th style="padding:4px 5px;font-weight:bold;font-size:13px;text-align:center;border-right:1px solid #000;border-bottom:1px solid #000;white-space:nowrap;">HSN/SAC</th>
             <th style="padding:4px 5px;font-weight:bold;font-size:13px;text-align:center;border-right:1px solid #000;border-bottom:1px solid #000;white-space:nowrap;">Quantity</th>
-            <th style="padding:4px 5px;font-weight:bold;font-size:13px;text-align:center;border-right:1px solid #000;border-bottom:1px solid #000;white-space:nowrap;">Rate</th>
-            <th style="padding:4px 5px;font-weight:bold;font-size:13px;text-align:center;border-right:1px solid #000;border-bottom:1px solid #000;white-space:nowrap;">Per</th>
+            <th style="padding:4px 5px;font-weight:bold;font-size:13px;text-align:center;border-right:1px solid #000;border-bottom:1px solid #000;white-space:nowrap;">Rate/Pcs</th>
             <th style="padding:4px 5px;font-weight:bold;font-size:13px;text-align:center;border-bottom:1px solid #000;white-space:nowrap;">Amount</th>
           </tr>
         </thead>
@@ -220,13 +218,12 @@ function buildInvoiceBody(payload, copyLabel = '') {
 
           <!-- Fixed-height body with column separators -->
           <tr>
-            <td colspan="7" style="padding:0;height:396px;vertical-align:top;border:0;position:relative;line-height:1;">
+            <td colspan="6" style="padding:0;height:396px;vertical-align:top;border:0;position:relative;line-height:1;">
               <!-- Column separator layer -->
               <table style="position:absolute;top:0;left:0;width:100%;height:100%;border-collapse:collapse;table-layout:fixed;">
                 ${colGroupHtml}
                 <tbody>
                   <tr style="height:396px;">
-                    <td style="border-right:1px solid #000;padding:0;"></td>
                     <td style="border-right:1px solid #000;padding:0;"></td>
                     <td style="border-right:1px solid #000;padding:0;"></td>
                     <td style="border-right:1px solid #000;padding:0;"></td>
@@ -250,19 +247,19 @@ function buildInvoiceBody(payload, copyLabel = '') {
 
           <!-- Taxable subtotal -->
           <tr style="border-top:1px solid #000;">
-            <td colspan="6" style="padding:2px 5px;text-align:right;font-weight:400;font-size:13px;"></td>
+            <td colspan="5" style="padding:2px 5px;text-align:right;font-weight:400;font-size:13px;"></td>
             <td style="padding:2px 5px;text-align:right;font-weight:400;font-size:13px;border-left:1px solid #000;">
               ${Number(taxableValue).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </td>
           </tr>
           <tr>
-            <td colspan="6" style="padding:2px 5px;text-align:right;font-weight:400;font-size:13px;">CGST 2.5%</td>
+            <td colspan="5" style="padding:2px 5px;text-align:right;font-weight:400;font-size:13px;">CGST 2.5%</td>
             <td style="padding:2px 5px;text-align:right;font-weight:400;font-size:13px;border-left:1px solid #000;">
               ${Number(cgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </td>
           </tr>
           <tr>
-            <td colspan="6" style="padding:2px 5px;text-align:right;font-weight:400;font-size:13px;">SGST 2.5%</td>
+            <td colspan="5" style="padding:2px 5px;text-align:right;font-weight:400;font-size:13px;">SGST 2.5%</td>
             <td style="padding:2px 5px;text-align:right;font-weight:400;font-size:13px;border-left:1px solid #000;">
               ${Number(sgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </td>
@@ -275,7 +272,7 @@ function buildInvoiceBody(payload, copyLabel = '') {
             <td style="padding:3px 5px;text-align:right;font-weight:bold;font-size:13px;">
               ${totalQuantity ? `${Number(totalQuantity).toLocaleString('en-IN')} Pcs` : ''}
             </td>
-            <td colspan="2" style="padding:3px 5px;"></td>
+            <td colspan="1" style="padding:3px 5px;"></td>
             <td style="padding:3px 5px;text-align:right;font-weight:700;font-size:13px;border-left:1px solid #000;">
               Rs. ${Number(finalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </td>
@@ -283,7 +280,7 @@ function buildInvoiceBody(payload, copyLabel = '') {
 
           <!-- Amount in words -->
           <tr style="border-top:1px solid #000;">
-            <td colspan="7" style="padding:4px 8px;line-height:1;">
+            <td colspan="6" style="padding:4px 8px;line-height:1;">
               <span style="font-weight:bold;font-size:13px;">Amount Chargeable (in words)</span>
               <span style="float:right;font-size:13px;">E. &amp; O.E</span>
               <div style="margin-top:3px;font-weight:400;font-size:13px;">${escapeHtml(amountWords)}</div>
@@ -292,7 +289,7 @@ function buildInvoiceBody(payload, copyLabel = '') {
 
           <!-- HSN/SAC GST summary -->
           <tr style="border-top:1px solid #000;line-height:1;">
-            <td colspan="7" style="padding:0;">
+            <td colspan="6" style="padding:0;">
               <table style="width:100%;border-collapse:collapse;table-layout:fixed;">
                 <colgroup>
                   <col style="width:14%"/>
@@ -336,14 +333,14 @@ function buildInvoiceBody(payload, copyLabel = '') {
 
           <!-- Tax amount in words -->
           <tr style="border-top:1px solid #000;">
-            <td colspan="7" style="padding:3px 8px;font-size:13px;font-weight:400;">
+            <td colspan="6" style="padding:3px 8px;font-size:13px;font-weight:400;">
               <strong>Tax Amount (in words) :</strong> ${escapeHtml(taxAmountWords)}
             </td>
           </tr>
 
           <!-- Bank + Signatory -->
           <tr style="border-top:1px solid #000;">
-            <td colspan="7" style="padding:0;">
+            <td colspan="6" style="padding:0;">
               <div style="display:flex;">
                 <div style="width:55%;padding:4px 8px;border-right:1px solid #000;">
                   <div style="font-weight:bold;font-size:13px;margin-bottom:6px;margin-top:6px;">Company's Bank Details</div>
@@ -363,8 +360,8 @@ function buildInvoiceBody(payload, copyLabel = '') {
                   </div>
                 </div>
                 <div style="width:45%;padding:4px 8px;text-align:right;">
-                  <div style="font-size:14px;font-weight:700;margin-top:15px;">for ${escapeHtml(settings.companyName)}</div>
-                  <div style="margin-top:40px;font-weight:bold;font-size:13px;">Authorised Signatory</div>
+                  <div style="font-size:14px;font-weight:700;margin-top:10px;">for ${escapeHtml(settings.companyName)}</div>
+                  <div style="margin-top:32px;margin-bottom:8px;font-weight:bold;font-size:13px;">Authorised Signatory</div>
                 </div>
               </div>
             </td>

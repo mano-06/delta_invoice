@@ -101,12 +101,12 @@ function Customers() {
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-slate-700">GST Number</label>
-                <input {...register('gstin')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
+                <label className="block text-sm font-medium text-slate-700">Address Line 3</label>
+                <input {...register('state')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700">State</label>
-                <input {...register('state')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
+                <label className="block text-sm font-medium text-slate-700">GST Number</label>
+                <input {...register('gstin')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
               </div>
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
@@ -132,7 +132,7 @@ function Customers() {
 
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-card">
           <h3 className="text-lg font-semibold text-slate-900">Customer List</h3>
-          <div className="mt-6 space-y-3">
+          <div className="mt-6 max-h-64 overflow-y-auto space-y-3">
             {customers.map((customer) => (
               <div key={customer.id} className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">

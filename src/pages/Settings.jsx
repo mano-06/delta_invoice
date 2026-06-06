@@ -119,9 +119,15 @@ function Settings() {
                 <input type="email" {...register('email')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
               </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700">State Name</label>
-              <input {...register('stateName')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-slate-700">State Name</label>
+                <input {...register('stateName')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Phone Number</label>
+                <input {...register('phoneNumber')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700">HSN/SAC</label>

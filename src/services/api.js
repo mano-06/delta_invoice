@@ -11,6 +11,7 @@ const defaultSettings = {
   stateName: '',
   email: '',
   phone: '',
+  phoneNumber: '',
   companyLogo: '',
   bankName: '',
   accountNumber: '',
@@ -262,6 +263,8 @@ export const api = {
   deleteCustomer: (id) => invoke('app:deleteCustomer', id),
   getProducts: () => invoke('app:getProducts'),
   saveProduct: (payload) => invoke('app:saveProduct', payload),
+  // Update product details; uses same channel as saveProduct with id to trigger update
+  updateProduct: (id, payload) => invoke('app:saveProduct', { ...payload, id }),
   deleteProduct: (id) => invoke('app:deleteProduct', id),
   getInvoices: (filter) => invoke('app:getInvoices', filter),
   getInvoiceById: (id) => invoke('app:getInvoiceById', id),

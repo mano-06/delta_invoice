@@ -19,6 +19,13 @@ const splitBuyerAddress = (value = '') => {
 
 const joinBuyerAddress = (line1 = '', line2 = '') => [line1.trim(), line2.trim()].filter(Boolean).join('\n')
 
+const isRowEmpty = (item) => {
+  const desc = String(item?.description || '').trim()
+  const qty = item?.quantity
+  const rate = item?.rate
+  return !desc && (qty === '' || qty === undefined || qty === null || isNaN(Number(qty))) && (rate === '' || rate === undefined || rate === null || isNaN(Number(rate)))
+}
+
 function CreateInvoice() {
   const { customers, products, settings, loadCustomers, loadProducts } = useContext(AppContext)
   const [invoiceMeta, setInvoiceMeta] = useState(null)
@@ -33,17 +40,6 @@ function CreateInvoice() {
     defaultValues: {
       invoiceNumber: '',
       invoiceDate: new Date().toLocaleDateString('en-GB').replace(/\//g, '-'),
-      deliveryNote: '',
-      paymentTerms: '',
-      referenceNo: '',
-      referenceDate: new Date().toISOString().slice(0, 10),
-      orderNo: '',
-      orderDate: new Date().toISOString().slice(0, 10),
-      dispatchDocNo: '',
-      dispatchDate: new Date().toISOString().slice(0, 10),
-      transporter: '',
-      destination: '',
-      termsOfDelivery: '',
       buyerName: '',
       buyerAddressLine1: '',
       buyerAddressLine2: '',
@@ -132,6 +128,23 @@ function CreateInvoice() {
     }, 0)
   }
 
+  const getRowStatus = (index) => {
+    const item = items?.[index] || {}
+    const desc = String(item.description || '').trim()
+    const qty = item.quantity
+    const rate = item.rate
+    const hasDesc = !!desc
+    const hasQty = !(qty === '' || qty === undefined || qty === null || isNaN(Number(qty)))
+    const hasRate = !(rate === '' || rate === undefined || rate === null || isNaN(Number(rate)))
+    
+    const numFilled = (hasDesc ? 1 : 0) + (hasQty ? 1 : 0) + (hasRate ? 1 : 0)
+    return {
+      isEmpty: numFilled === 0,
+      isIncomplete: numFilled > 0 && numFilled < 3,
+      isComplete: numFilled === 3
+    }
+  }
+
   // Navigate: description → quantity → rate → new row (or next description if row exists)
   const handleDescriptionKeyDown = (event, index) => {
     if (event.key === 'Enter') {
@@ -147,15 +160,41 @@ function CreateInvoice() {
     }
   }
 
+  const handleNumericKeyDown = (event) => {
+    const allowedKeys = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter', 'Home', 'End', 'Copy', 'Paste']
+    if (allowedKeys.includes(event.key) || event.ctrlKey || event.metaKey) {
+      return
+    }
+    if (event.key === '.' && !event.target.value.includes('.')) {
+      return
+    }
+    if (!/[0-9]/.test(event.key)) {
+      event.preventDefault()
+    }
+  }
+
   const handleRateKeyDown = (event, index) => {
     if (event.key === 'Enter') {
       event.preventDefault()
+      const status = getRowStatus(index)
+      if (status.isIncomplete) {
+        // One or two fields are missing: Do NOT move to next row
+        return
+      }
+      if (status.isEmpty) {
+        // All three fields are empty: Save invoice when pressing enter from Rate/Pcs (if customer is selected)
+        if (!watch('buyerName')) {
+          toast.error('Please select a customer first')
+          return
+        }
+        handleSubmit(onSubmit)()
+        return
+      }
+      // Row is complete: Move to next row's description
       const nextIndex = index + 1
       if (nextIndex < fields.length) {
-        // Move to next row's description
         descriptionRefs.current[nextIndex]?.focus()
       } else {
-        // Add a new row and focus its description
         appendRow()
       }
     }
@@ -173,7 +212,7 @@ function CreateInvoice() {
   }
 
   const totals = (() => {
-    const safeItems = items || []
+    const safeItems = (items || []).filter(item => !isRowEmpty(item))
     const taxableValue = safeItems.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.rate || 0), 0)
     const taxAmount = safeItems.reduce((sum, item) => {
       const taxRate = Number(item.taxRate || 5)
@@ -181,8 +220,8 @@ function CreateInvoice() {
     }, 0)
     const cgstAmount = Number((taxAmount / 2).toFixed(2))
     const sgstAmount = Number((taxAmount / 2).toFixed(2))
-    const rawTotal = taxableValue + taxAmount
-    const roundedTotal = Number(rawTotal.toFixed(0))
+    const rawTotal = Number((taxableValue + cgstAmount + sgstAmount).toFixed(2))
+    const roundedTotal = Math.round(rawTotal)
     const roundOff = Number((roundedTotal - rawTotal).toFixed(2))
 
     return {
@@ -191,7 +230,7 @@ function CreateInvoice() {
       sgstAmount,
       roundOff,
       totalQuantity: safeItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
-      finalAmount: Number((rawTotal + roundOff).toFixed(2)),
+      finalAmount: roundedTotal,
     }
   })()
 
@@ -275,6 +314,7 @@ function CreateInvoice() {
       gstin: settings?.gstin || '',
       stateName: settings?.stateName || '',
       email: settings?.email || '',
+      phoneNumber: settings?.phoneNumber || '',
       bankName: settings?.bankName || '',
       accountNumber: settings?.accountNumber || '',
       branchIfsc: settings?.branchIfsc || '',
@@ -289,7 +329,7 @@ function CreateInvoice() {
       buyerState: formValues.buyerState || '',
       amountWords: toIndianCurrency(totals.finalAmount),
     },
-    items: (formValues.items || []).map((item, index) => ({
+    items: (formValues.items || []).filter(item => !isRowEmpty(item)).map((item, index) => ({
       serial: index + 1,
       description: item.description || '',
       hsn: item.hsn || '',
@@ -310,7 +350,65 @@ function CreateInvoice() {
   })
 
   const onSubmit = async (data) => {
-    await Promise.all((items || []).map((_, index) => saveItemProduct(index, true)))
+    if (!data.buyerName) {
+      toast.error('Please select a customer first')
+      return
+    }
+
+    const nonEvItems = (data.items || []).filter(item => !isRowEmpty(item))
+    if (nonEvItems.length === 0) {
+      toast.error('Please add at least one item to the invoice')
+      return
+    }
+
+    // Save/Associate products for all non-empty items
+    await Promise.all(
+      nonEvItems.map(async (item) => {
+        const description = String(item.description || '').trim()
+        if (!description) return
+
+        const existing = findProductByName(description)
+        const itemRate = Number(item.rate || 0)
+        const itemGst = Number(item.taxRate || 5)
+        const itemUnit = item.unit || 'Pcs'
+
+        if (existing) {
+          item.productId = existing.id
+          item.hsn = existing.hsn || settings?.hsnSac || ''
+          item.rate = itemRate
+          item.unit = itemUnit
+          item.taxRate = itemGst
+
+          // If current details differ from catalog, update the product
+          if (
+            Number(existing.rate || 0) !== itemRate ||
+            Number(existing.gstRate || 0) !== itemGst ||
+            (existing.unit || 'Pcs') !== itemUnit
+          ) {
+            await api.updateProduct(existing.id, {
+              name: existing.name,
+              hsn: existing.hsn,
+              rate: itemRate,
+              gstRate: itemGst,
+              unit: itemUnit,
+            })
+          }
+        } else {
+          const newProduct = {
+            name: description,
+            hsn: item.hsn || settings?.hsnSac || '',
+            rate: itemRate,
+            gstRate: itemGst,
+            unit: itemUnit,
+          }
+          const response = await api.saveProduct(newProduct)
+          if (response && response.id) {
+            item.productId = response.id
+          }
+        }
+      })
+    )
+    await loadProducts()
 
     const payload = {
       ...data,
@@ -326,7 +424,7 @@ function CreateInvoice() {
       roundOff: totals.roundOff,
       totalAmount: totals.finalAmount,
       totalQuantity: totals.totalQuantity,
-      items: data.items.map((item, index) => ({
+      items: nonEvItems.map((item, index) => ({
         serial: index + 1,
         description: item.description,
         hsn: item.hsn,
@@ -441,7 +539,7 @@ function CreateInvoice() {
                   <th className="px-4 py-3">Sl No.</th>
                   <th className="px-4 py-3">Description of Goods</th>
                   <th className="px-4 py-3">Quantity</th>
-                  <th className="px-4 py-3">Rate</th>
+                  <th className="px-4 py-3">Rate/Pcs</th>
                   <th className="px-4 py-3">Amount</th>
                   <th className="px-4 py-3">Action</th>
                 </tr>
@@ -481,6 +579,7 @@ function CreateInvoice() {
                             <input
                               type="number"
                               min="0"
+                              step="any"
                               {...quantityRegister}
                               ref={(element) => {
                                 quantityRefs.current[index] = element
@@ -490,7 +589,10 @@ function CreateInvoice() {
                                   quantityRef.current = element
                                 }
                               }}
-                              onKeyDown={(event) => handleQuantityKeyDown(event, index)}
+                              onKeyDown={(event) => {
+                                handleNumericKeyDown(event)
+                                handleQuantityKeyDown(event, index)
+                              }}
                               className="w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                             />
                           )
@@ -504,6 +606,7 @@ function CreateInvoice() {
                             <input
                               type="number"
                               min="0"
+                              step="any"
                               {...rateRegister}
                               ref={(element) => {
                                 rateRefs.current[index] = element
@@ -513,7 +616,10 @@ function CreateInvoice() {
                                   rateRef.current = element
                                 }
                               }}
-                              onKeyDown={(event) => handleRateKeyDown(event, index)}
+                              onKeyDown={(event) => {
+                                handleNumericKeyDown(event)
+                                handleRateKeyDown(event, index)
+                              }}
                               className="w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                             />
                           )

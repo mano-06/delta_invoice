@@ -15,11 +15,13 @@ const defaultSettings = {
   stateName: '',
   email: '',
   phone: '',
+  phoneNumber: '',
   bankName: '',
   accountNumber: '',
   branchIfsc: '',
   hsnSac: '',
 }
+
 
 function getDatabasePath(userDataPath) {
   const dbDir = path.join(userDataPath, 'data')
@@ -80,6 +82,7 @@ function createTables() {
     invoiceFormat TEXT
   )`).run()
   ensureColumn('settings', 'hsnSac', 'TEXT')
+  ensureColumn('settings', 'phoneNumber', 'TEXT')
   console.log('settings table ready')
 
   console.log('creating customers table')
@@ -218,6 +221,7 @@ function saveSettings(payload = {}) {
     stateName: payload.stateName || '',
     email: payload.email || '',
     phone: payload.phone || '',
+    phoneNumber: payload.phoneNumber || '',
     bankName: payload.bankName || '',
     accountNumber: payload.accountNumber || '',
     branchIfsc: payload.branchIfsc || '',
@@ -235,6 +239,7 @@ function saveSettings(payload = {}) {
       stateName=@stateName,
       email=@email,
       phone=@phone,
+      phoneNumber=@phoneNumber,
       bankName=@bankName,
       accountNumber=@accountNumber,
       branchIfsc=@branchIfsc,
@@ -245,8 +250,8 @@ function saveSettings(payload = {}) {
   }
 
   const stmt = db.prepare(`INSERT INTO settings (
-    companyName, address1, address2, city, pincode, gstin, stateName, email, phone, bankName, accountNumber, branchIfsc, hsnSac
-  ) VALUES (@companyName, @address1, @address2, @city, @pincode, @gstin, @stateName, @email, @phone, @bankName, @accountNumber, @branchIfsc, @hsnSac)`)
+    companyName, address1, address2, city, pincode, gstin, stateName, email, phone, phoneNumber, bankName, accountNumber, branchIfsc, hsnSac
+  ) VALUES (@companyName, @address1, @address2, @city, @pincode, @gstin, @stateName, @email, @phone, @phoneNumber, @bankName, @accountNumber, @branchIfsc, @hsnSac)`)
   return stmt.run(normalized)
 }
 
@@ -338,10 +343,10 @@ function getNextInvoiceNumber() {
   const sequence = db.prepare('SELECT lastSequence FROM invoice_sequence WHERE id = 1').get()
   const nextSequence = (sequence?.lastSequence || 0) + 1
   if (nextSequence <= 99) {
-      return {
-        nextSequence,
-        invoiceNumber: `DD-${String(nextSequence).padStart(3, '0')}`
-      }
+    return {
+      nextSequence,
+      invoiceNumber: `DD-${String(nextSequence).padStart(3, '0')}`
+    }
   }
   return {
     nextSequence,
@@ -550,3 +555,4 @@ module.exports = {
   exportJson,
   importJson,
 }
+
