@@ -5,7 +5,8 @@ import toast from 'react-hot-toast'
 import { AppContext } from '../context/AppContext'
 import { api } from '../services/api'
 import { downloadInvoicePdf, printInvoice } from '../pdf/invoicePdf'
-import { formatCurrency, toIndianCurrency } from '../utils/format'
+import { formatCurrency, toIndianCurrency, formatDateDisplay } from '../utils/format'
+import useKeyboardShortcuts from '../hooks/useKeyboardShortcuts'
 
 const MAX_ITEMS = 20
 
@@ -30,16 +31,21 @@ function CreateInvoice() {
   const { customers, products, settings, loadCustomers, loadProducts } = useContext(AppContext)
   const [invoiceMeta, setInvoiceMeta] = useState(null)
   const [activeDropdown, setActiveDropdown] = useState(null)
+  const [dropdownSelectedIndex, setDropdownSelectedIndex] = useState(0)
   const navigate = useNavigate()
+  const customerSelectRef = useRef(null)
   const descriptionRefs = useRef([])
   const quantityRefs = useRef([])
   const rateRefs = useRef([])
   const dropdownContainerRef = useRef(null)
+  
+  // Initialize keyboard shortcuts with dropdown state
+  useKeyboardShortcuts({ isDropdownOpen: activeDropdown !== null })
 
   const { register, control, handleSubmit, watch, setValue, reset } = useForm({
     defaultValues: {
       invoiceNumber: '',
-      invoiceDate: new Date().toLocaleDateString('en-GB').replace(/\//g, '-'),
+      invoiceDate: new Date().toISOString().slice(0, 10),
       buyerName: '',
       buyerAddressLine1: '',
       buyerAddressLine2: '',
@@ -107,6 +113,19 @@ function CreateInvoice() {
   }, [settings, setValue])
 
   useEffect(() => {
+    const handlePageEnter = (event) => {
+      if (event.key !== 'Enter') return
+      const active = document.activeElement
+      if (active === document.body || active === document.documentElement || active == null) {
+        event.preventDefault()
+        customerSelectRef.current?.focus()
+      }
+    }
+    window.addEventListener('keydown', handlePageEnter)
+    return () => window.removeEventListener('keydown', handlePageEnter)
+  }, [])
+
+  useEffect(() => {
     if (!settings) return
 
     items?.forEach((item, index) => {
@@ -147,7 +166,63 @@ function CreateInvoice() {
 
   // Navigate: description → quantity → rate → new row (or next description if row exists)
   const handleDescriptionKeyDown = (event, index) => {
+    const currentItem = items?.[index] || {}
+    const filteredProducts = products
+      .filter((product) =>
+        product.name.toLowerCase().includes(currentItem.description?.toLowerCase() || '')
+      )
+      .slice(0, 5)
+
+    // Handle Esc to close dropdown
+    if (event.key === 'Escape') {
+      if (activeDropdown === index) {
+        event.preventDefault()
+        setActiveDropdown(null)
+        setDropdownSelectedIndex(0)
+        descriptionRefs.current[index]?.focus()
+      }
+      return
+    }
+
+    // Handle dropdown arrow key navigation
+    if (activeDropdown === index && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+      event.preventDefault()
+      if (filteredProducts.length === 0) return
+
+      if (event.key === 'ArrowDown') {
+        setDropdownSelectedIndex((prev) => (prev + 1) % filteredProducts.length)
+      } else {
+        setDropdownSelectedIndex((prev) => (prev - 1 + filteredProducts.length) % filteredProducts.length)
+      }
+      return
+    }
+
+    // Handle Enter key
     if (event.key === 'Enter') {
+      if (event.shiftKey) {
+        event.preventDefault()
+        if (index > 0) {
+          rateRefs.current[index - 1]?.focus()
+        } else {
+          customerSelectRef.current?.focus()
+        }
+        return
+      }
+
+      // If dropdown is open, select the highlighted product
+      if (activeDropdown === index && filteredProducts.length > 0) {
+        event.preventDefault()
+        const selectedProduct = filteredProducts[dropdownSelectedIndex]
+        handleItemDescriptionChange(index, selectedProduct.name)
+        setActiveDropdown(null)
+        setDropdownSelectedIndex(0)
+        window.setTimeout(() => {
+          quantityRefs.current[index]?.focus()
+        }, 0)
+        return
+      }
+
+      // Otherwise, move to quantity field (normal Enter behavior)
       event.preventDefault()
       quantityRefs.current[index]?.focus()
     }
@@ -156,6 +231,10 @@ function CreateInvoice() {
   const handleQuantityKeyDown = (event, index) => {
     if (event.key === 'Enter') {
       event.preventDefault()
+      if (event.shiftKey) {
+        descriptionRefs.current[index]?.focus()
+        return
+      }
       rateRefs.current[index]?.focus()
     }
   }
@@ -176,6 +255,10 @@ function CreateInvoice() {
   const handleRateKeyDown = (event, index) => {
     if (event.key === 'Enter') {
       event.preventDefault()
+      if (event.shiftKey) {
+        quantityRefs.current[index]?.focus()
+        return
+      }
       const status = getRowStatus(index)
       if (status.isIncomplete) {
         // One or two fields are missing: Do NOT move to next row
@@ -243,6 +326,9 @@ function CreateInvoice() {
     setValue('buyerAddressLine2', buyerAddressLine2)
     setValue('buyerGstin', customer.gstin)
     setValue('buyerState', customer.state)
+    window.setTimeout(() => {
+      descriptionRefs.current[0]?.focus()
+    }, 0)
   }
 
   const findProductByName = (name) => {
@@ -322,7 +408,7 @@ function CreateInvoice() {
     },
     invoice: {
       invoiceNumber: formValues.invoiceNumber || '',
-      invoiceDate: formValues.invoiceDate || '',
+      invoiceDate: formatDateDisplay(formValues.invoiceDate || ''),
       buyerName: formValues.buyerName || '',
       buyerAddress: joinBuyerAddress(formValues.buyerAddressLine1, formValues.buyerAddressLine2),
       buyerGstin: formValues.buyerGstin || '',
@@ -479,6 +565,7 @@ function CreateInvoice() {
               <div>
                 <label className="block text-sm font-medium text-slate-700">Select Customer</label>
                 <select
+                  ref={customerSelectRef}
                   onChange={(event) => handleCustomerSelect(event.target.value)}
                   className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
                 >
@@ -558,10 +645,22 @@ function CreateInvoice() {
                           type="text"
                           value={currentItem.description || ''}
                           onChange={(event) => {
-                            handleItemDescriptionChange(index, event.target.value)
-                            setActiveDropdown(index)
+                            const newValue = event.target.value
+                            handleItemDescriptionChange(index, newValue)
+                            setDropdownSelectedIndex(0) // Reset dropdown selection
+                            // Only show dropdown if there's at least 1 character
+                            if (newValue.trim().length > 0) {
+                              setActiveDropdown(index)
+                            } else {
+                              setActiveDropdown(null)
+                            }
                           }}
-                          onFocus={() => setActiveDropdown(index)}
+                          onFocus={() => {
+                            // Only open dropdown if description has at least 1 character
+                            if (currentItem.description && String(currentItem.description).trim().length > 0) {
+                              setActiveDropdown(index)
+                            }
+                          }}
                           onBlur={() => setTimeout(() => setActiveDropdown(null), 200)}
                           ref={(element) => {
                             descriptionRefs.current[index] = element
@@ -656,51 +755,64 @@ function CreateInvoice() {
           )}
 
           {/* Floating Dropdown Container */}
-          {activeDropdown !== null && descriptionRefs.current[activeDropdown] && (
-            <div
-              ref={dropdownContainerRef}
-              style={{
-                position: 'fixed',
-                top: `${descriptionRefs.current[activeDropdown]?.getBoundingClientRect().bottom + 4}px`,
-                left: `${descriptionRefs.current[activeDropdown]?.getBoundingClientRect().left}px`,
-                width: `${descriptionRefs.current[activeDropdown]?.getBoundingClientRect().width}px`,
-                zIndex: 9999,
-              }}
-              className="rounded-lg border bg-white shadow-lg"
-            >
-              {(() => {
-                const currentItem = items?.[activeDropdown] || {}
-                const filteredProducts = products
-                  .filter((product) =>
-                    product.name.toLowerCase().includes(currentItem.description?.toLowerCase() || '')
-                  )
-                  .slice(0, 5)
-                
-                if (filteredProducts.length === 0) return null
-                
-                return (
-                  <div className="max-h-40 overflow-y-auto">
-                    {filteredProducts.map((product) => (
-                      <div
-                        key={product.id}
-                        className="px-3 py-2 cursor-pointer hover:bg-gray-100 text-sm text-slate-900"
-                        onMouseDown={() => {
-                          const selectedIndex = activeDropdown
-                          handleItemDescriptionChange(selectedIndex, product.name)
-                          setActiveDropdown(null)
-                          window.setTimeout(() => {
-                            quantityRefs.current[selectedIndex]?.focus()
-                          }, 0)
-                        }}
-                      >
-                        {product.name}
-                      </div>
-                    ))}
-                  </div>
-                )
-              })()}
-            </div>
-          )}
+          {activeDropdown !== null && descriptionRefs.current[activeDropdown] && (() => {
+            const currentItem = items?.[activeDropdown] || {}
+            const description = String(currentItem.description || '').trim()
+            
+            // Only show dropdown if description has at least 1 character
+            if (description.length === 0) {
+              return null
+            }
+            
+            const filteredProducts = products
+              .filter((product) =>
+                product.name.toLowerCase().includes(description.toLowerCase())
+              )
+              .slice(0, 5)
+
+            if (filteredProducts.length === 0) return null
+
+            return (
+              <div
+                ref={dropdownContainerRef}
+                style={{
+                  position: 'fixed',
+                  top: `${descriptionRefs.current[activeDropdown]?.getBoundingClientRect().bottom + 4}px`,
+                  left: `${descriptionRefs.current[activeDropdown]?.getBoundingClientRect().left}px`,
+                  width: `${descriptionRefs.current[activeDropdown]?.getBoundingClientRect().width}px`,
+                  zIndex: 9999,
+                }}
+                className="rounded-lg border bg-white shadow-lg"
+              >
+                <div className="max-h-40 overflow-y-auto">
+                  {filteredProducts.map((product, idx) => (
+                    <div
+                      key={product.id}
+                      className={`px-3 py-2 cursor-pointer text-sm ${
+                        idx === dropdownSelectedIndex
+                          ? 'bg-slate-200 text-slate-900 font-medium'
+                          : 'hover:bg-gray-100 text-slate-900'
+                      }`}
+                      onMouseDown={() => {
+                        const selectedIndex = activeDropdown
+                        handleItemDescriptionChange(selectedIndex, product.name)
+                        setActiveDropdown(null)
+                        setDropdownSelectedIndex(0)
+                        window.setTimeout(() => {
+                          quantityRefs.current[selectedIndex]?.focus()
+                        }, 0)
+                      }}
+                      onMouseEnter={() => {
+                        setDropdownSelectedIndex(idx)
+                      }}
+                    >
+                      {product.name}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
         </section>
 
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-card">

@@ -2,11 +2,22 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { api } from '../services/api';
+import useEnterNavigation from '../hooks/useEnterNavigation';
+import { blurActiveElement } from '../utils/focusManagement';
 
 function Products() {
   const [products, setProducts] = useState([]);
   const [editing, setEditing] = useState(null);
-  const { register, handleSubmit, reset, setValue } = useForm();
+  const { register, handleSubmit, reset, setValue, setFocus, formState: { errors } } = useForm({ mode: 'onSubmit' });
+  
+  useEnterNavigation();
+
+  const onInvalid = (formErrors) => {
+    const firstInvalid = Object.keys(formErrors)[0]
+    if (firstInvalid) {
+      setFocus(firstInvalid)
+    }
+  }
 
   useEffect(() => {
     loadProducts();
@@ -59,6 +70,8 @@ function Products() {
     reset();
     setEditing(null);
     loadProducts();
+    // Clear focus after save
+    blurActiveElement();
   };
 
   return (
@@ -74,13 +87,17 @@ function Products() {
         {/* Product Form */}
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-card">
           <h3 className="text-lg font-semibold text-slate-900">Product Form</h3>
-          <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4">
+          <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="mt-6 space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700">Product Name</label>
               <input
-                {...register('name')}
-                className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
+                {...register('name', { required: 'Product Name is required' })}
+                aria-invalid={errors.name ? 'true' : 'false'}
+                className={`mt-2 w-full rounded-2xl border px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none ${errors.name ? 'border-red-500' : 'border-slate-300'}`}
               />
+              {errors.name && (
+                <p className="mt-2 text-xs text-red-600">{errors.name.message}</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700">Rate</label>
@@ -88,6 +105,13 @@ function Products() {
                 type="number"
                 step="any"
                 {...register('rate')}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    handleSubmit(onSubmit, onInvalid)()
+                  }
+                }}
                 className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
               />
             </div>
@@ -104,6 +128,7 @@ function Products() {
                   onClick={() => {
                     reset();
                     setEditing(null);
+                    blurActiveElement();
                   }}
                   className="rounded-full border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
                 >

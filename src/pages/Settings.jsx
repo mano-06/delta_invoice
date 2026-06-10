@@ -2,11 +2,15 @@ import { useContext, useEffect, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import toast from 'react-hot-toast'
 import { AppContext } from '../context/AppContext'
+import useEnterNavigation from '../hooks/useEnterNavigation'
+import { blurActiveElement } from '../utils/focusManagement'
 
 function Settings() {
   const { settings, saveSettings } = useContext(AppContext)
   const { register, handleSubmit, reset, watch, setValue } = useForm()
   const logoInputRef = useRef(null)
+  
+  useEnterNavigation()
 
   useEffect(() => {
     if (settings) {
@@ -40,7 +44,11 @@ function Settings() {
     const response = await saveSettings(payload);
     if (!response) {
       toast.error('Could not update settings');
+      return;
     }
+    toast.success('Settings saved');
+    // Clear focus after save
+    blurActiveElement();
   };
 
   return (
@@ -151,7 +159,17 @@ function Settings() {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700">IFS Code</label>
-              <input {...register('branchIfsc')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
+              <input
+                {...register('branchIfsc')}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    handleSubmit(onSubmit)()
+                  }
+                }}
+                className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
+              />
             </div>
           </div>
           <div className="mt-6">

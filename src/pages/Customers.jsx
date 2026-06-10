@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react';
+import useEnterNavigation from '../hooks/useEnterNavigation';
 import { useForm } from 'react-hook-form'
 import toast from 'react-hot-toast'
 import { api } from '../services/api'
+import { blurActiveElement } from '../utils/focusManagement'
 
 const splitBillingAddress = (value = '') => {
   const lines = String(value || '').split(/\r?\n/).map((line) => line.trim())
@@ -14,9 +16,20 @@ const splitBillingAddress = (value = '') => {
 const joinBillingAddress = (line1 = '', line2 = '') => [line1.trim(), line2.trim()].filter(Boolean).join('\n')
 
 function Customers() {
+  useEnterNavigation();
   const [customers, setCustomers] = useState([])
   const [editing, setEditing] = useState(null)
-  const { register, handleSubmit, reset, setValue } = useForm()
+  const { register, handleSubmit, reset, setValue, watch, setFocus, formState: { errors } } = useForm({ mode: 'onSubmit' })
+  const emailFieldRef = useRef(null)
+  
+  const formData = watch()
+
+  const onInvalid = (formErrors) => {
+    const firstInvalid = Object.keys(formErrors)[0]
+    if (firstInvalid) {
+      setFocus(firstInvalid)
+    }
+  }
 
   useEffect(() => {
     loadCustomers()
@@ -72,6 +85,8 @@ function Customers() {
     reset()
     setEditing(null)
     loadCustomers()
+    // Clear focus after save
+    blurActiveElement()
   }
 
   return (
@@ -84,15 +99,25 @@ function Customers() {
       <div className="grid gap-6 xl:grid-cols-[1fr_1.6fr]">
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-card">
           <h3 className="text-lg font-semibold text-slate-900">Customer Form</h3>
-          <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4">
+          <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="mt-6 space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700">Customer Name</label>
-              <input {...register('name')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
+              <input
+                {...register('name', { required: 'Customer Name is required' })}
+                aria-invalid={errors.name ? 'true' : 'false'}
+                className={`mt-2 w-full rounded-2xl border px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none ${errors.name ? 'border-red-500' : 'border-slate-300'}`}
+              />
+              {errors.name && <p className="mt-2 text-xs text-red-600">{errors.name.message}</p>}
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-slate-700">Address Line 1</label>
-                <input {...register('billingAddressLine1')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
+                <input
+                  {...register('billingAddressLine1', { required: 'Address Line 1 is required' })}
+                  aria-invalid={errors.billingAddressLine1 ? 'true' : 'false'}
+                  className={`mt-2 w-full rounded-2xl border px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none ${errors.billingAddressLine1 ? 'border-red-500' : 'border-slate-300'}`}
+                />
+                {errors.billingAddressLine1 && <p className="mt-2 text-xs text-red-600">{errors.billingAddressLine1.message}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700">Address Line 2</label>
@@ -106,7 +131,12 @@ function Customers() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700">GST Number</label>
-                <input {...register('gstin')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
+                <input
+                  {...register('gstin', { required: 'GST Number is required' })}
+                  aria-invalid={errors.gstin ? 'true' : 'false'}
+                  className={`mt-2 w-full rounded-2xl border px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none ${errors.gstin ? 'border-red-500' : 'border-slate-300'}`}
+                />
+                {errors.gstin && <p className="mt-2 text-xs text-red-600">{errors.gstin.message}</p>}
               </div>
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
@@ -116,13 +146,33 @@ function Customers() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700">Email</label>
-                <input {...register('email')} type="email" className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
+                <input 
+                  {...register('email')} 
+                  type="email" 
+                  ref={emailFieldRef}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      handleSubmit(onSubmit, onInvalid)()
+                    }
+                  }}
+                  className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" 
+                />
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
               <button type="submit" className="rounded-full bg-slate-900 px-6 py-3 text-sm font-semibold text-white hover:bg-slate-800">Save Customer</button>
               {editing && (
-                <button type="button" onClick={() => { reset(); setEditing(null) }} className="rounded-full border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50">
+                <button 
+                  type="button" 
+                  onClick={() => { 
+                    reset()
+                    setEditing(null)
+                    blurActiveElement()
+                  }} 
+                  className="rounded-full border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                >
                   Cancel
                 </button>
               )}

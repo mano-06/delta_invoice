@@ -5,7 +5,7 @@ import toast from 'react-hot-toast'
 import { AppContext } from '../context/AppContext'
 import { api } from '../services/api'
 import { downloadInvoicePdf, printInvoice } from '../pdf/invoicePdf'
-import { formatCurrency, toIndianCurrency } from '../utils/format'
+import { formatCurrency, toIndianCurrency, formatDateDisplay, parseDateToIso } from '../utils/format'
 
 const MAX_ITEMS = 20
 
@@ -44,7 +44,7 @@ function InvoicePreview() {
   const { register, control, handleSubmit, watch, reset, setValue } = useForm({
     defaultValues: {
       invoiceNumber: '',
-      invoiceDate: new Date().toLocaleDateString('en-GB').replace(/\//g, '-'),
+      invoiceDate: new Date().toISOString().slice(0, 10),
       buyerName: '',
       buyerAddressLine1: '',
       buyerAddressLine2: '',
@@ -184,18 +184,7 @@ function InvoicePreview() {
 
   const mapInvoiceToForm = (record) => ({
     invoiceNumber: record.invoiceNumber || '',
-    invoiceDate: record.invoiceDate || new Date().toISOString().slice(0, 10),
-    deliveryNote: record.deliveryNote || '',
-    paymentTerms: record.paymentTerms || 'Cash',
-    referenceNo: record.referenceNo || '',
-    referenceDate: record.referenceDate || new Date().toISOString().slice(0, 10),
-    orderNo: record.orderNo || '',
-    orderDate: record.orderDate || new Date().toISOString().slice(0, 10),
-    dispatchDocNo: record.dispatchDocNo || '',
-    dispatchDate: record.dispatchDate || new Date().toISOString().slice(0, 10),
-    transporter: record.transporter || '',
-    destination: record.destination || '',
-    termsOfDelivery: record.termsOfDelivery || 'Within India',
+    invoiceDate: parseDateToIso(record.invoiceDate || new Date().toISOString().slice(0, 10)),
     buyerName: record.buyerName || '',
     ...splitBuyerAddress(record.buyerAddress || ''),
     buyerGstin: record.buyerGstin || '',
@@ -261,6 +250,8 @@ function InvoicePreview() {
     setInvoice(response)
   }
 
+  const displayInvoiceDate = formatDateDisplay(formValues.invoiceDate || invoice?.invoiceDate || '')
+
   const buildPreviewInvoice = () => {
     const cgstAmt = totals.cgstAmount
     const sgstAmt = totals.sgstAmount
@@ -282,7 +273,7 @@ function InvoicePreview() {
       },
       invoice: {
         invoiceNumber: formValues.invoiceNumber || invoice?.invoiceNumber || '',
-        invoiceDate: formValues.invoiceDate || invoice?.invoiceDate || '',
+        invoiceDate: displayInvoiceDate,
         buyerName: formValues.buyerName || invoice?.buyerName || '',
         buyerAddress: joinBuyerAddress(formValues.buyerAddressLine1, formValues.buyerAddressLine2),
         buyerGstin: formValues.buyerGstin || invoice?.buyerGstin || '',
@@ -718,7 +709,7 @@ function InvoicePreview() {
           id="invoice-preview"
           className="invoice-sheet"
           style={{
-            fontFamily: "'Fututa Cyrillic', 'Futura Cyrillic', 'Futura-Cyrillic', 'Futura PT', 'Futura', 'Jost', sans-serif",
+            fontFamily: 'Jost',
             fontSize: '9px',
             color: '#000',
             fontWeight: '400',
@@ -771,7 +762,7 @@ function InvoicePreview() {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '44.5% 55.5%' }}>
                 <div style={{ padding: '8px 6px', fontSize: '13px', borderRight: '1px solid #000', fontWeight: '400' }}>{formValues.invoiceNumber}</div>
-                <div style={{ padding: '8px 6px', fontSize: '13px', fontWeight: '400' }}>{formValues.invoiceDate}</div>
+                <div style={{ padding: '8px 6px', fontSize: '13px', fontWeight: '400' }}>{displayInvoiceDate}</div>
               </div>
             </div>
           </div>
@@ -817,9 +808,9 @@ function InvoicePreview() {
                                 { val: index + 1, align: 'center' },
                                 { val: item.description, align: 'left' },
                                 { val: item.hsn || settings?.hsnSac || '', align: 'center' },
-                                { val: item.quantity ? `${Number(item.quantity).toLocaleString('en-IN')} Pcs` : '', align: 'center' },
-                                { val: item.rate ? Number(item.rate).toFixed(2) : '', align: 'center' },
-                                { val: amount ? Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '', align: 'center' },
+                                { val: item.quantity ? `${Number(item.quantity).toLocaleString('en-IN')} Pcs` : '', align: 'right' },
+                                { val: item.rate ? Number(item.rate).toFixed(2) : '', align: 'right' },
+                                { val: amount ? Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '', align: 'right' },
                               ]
                               return (
                                 <tr key={index}>

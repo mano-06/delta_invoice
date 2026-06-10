@@ -1,6 +1,21 @@
 const path = require('path')
 const fs = require('fs')
 const { app, BrowserWindow, ipcMain, dialog } = require('electron')
+
+ipcMain.on('exit-app', async () => {
+  const result = await dialog.showMessageBox(mainWindow, {
+    type: 'question',
+    buttons: ['Yes', 'No'],
+    defaultId: 1,
+    title: 'Exit Application',
+    message: 'Do you want to exit the application?',
+  })
+
+  if (result.response === 0) {
+    app.quit()
+  }
+})
+
 const {
   initializeDatabase,
   getSettings,
@@ -37,7 +52,7 @@ const devServerUrl = 'http://127.0.0.1:5173'
 
 function createMainWindow() {
   console.log('creating browser window')
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1420,
     height: 920,
     minWidth: 1100,

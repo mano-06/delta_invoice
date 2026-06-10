@@ -3,13 +3,13 @@ import { useContext } from 'react'
 import { AppContext } from '../context/AppContext'
 
 const navItems = [
-  { label: 'Dashboard', path: '/' },
-  { label: 'Create Invoice', path: '/create-invoice' },
-  { label: 'Invoice History', path: '/invoice-history' },
-  { label: 'Customers', path: '/customers' },
-  { label: 'Products', path: '/products' },
-  { label: 'Settings', path: '/settings' },
-  { label: 'Backup & Restore', path: '/backup' },
+  { label: 'Dashboard', path: '/', shortcutIndex: 0 },
+  { label: 'Create Invoice', path: '/create-invoice', shortcutIndex: 0 },
+  { label: 'Invoice History', path: '/invoice-history', shortcutIndex: 0 },
+  { label: 'Users / Customers', path: '/customers', shortcutIndex: 0 },
+  { label: 'Products', path: '/products', shortcutIndex: 0 },
+  { label: 'Settings', path: '/settings', shortcutIndex: 0 },
+  { label: 'Backup & Restore', path: '/backup', shortcutIndex: 0 },
 ]
 
 function AppLayout({ children }) {
@@ -37,7 +37,17 @@ function AppLayout({ children }) {
                       : 'text-slate-700 hover:bg-slate-50'
                   }`}
                 >
-                  {item.label}
+                  <span>
+                    {item.label.split('').map((char, index) =>
+                      index === item.shortcutIndex ? (
+                        <span key={index} className="underline decoration-slate-900">
+                          {char}
+                        </span>
+                      ) : (
+                        <span key={index}>{char}</span>
+                      )
+                    )}
+                  </span>
                 </Link>
               )
             })}
@@ -55,7 +65,7 @@ function AppLayout({ children }) {
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Current</p>
-              <p className="text-lg font-semibold text-slate-900">{new Date().toLocaleDateString()}</p>
+              <p className="text-lg font-semibold text-slate-900">{new Date().toLocaleDateString('en-GB').replace(/V/g,'-')}</p>
             </div>
           </header>
           {children}

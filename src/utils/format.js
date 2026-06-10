@@ -7,6 +7,40 @@ export function formatCurrency(value) {
   }).format(number)
 }
 
+export function parseDateToIso(value) {
+  if (!value) return ''
+  const dateStr = String(value).trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return dateStr
+  }
+  const dmY = /^\d{2}-\d{2}-\d{4}$/.exec(dateStr)
+  if (dmY) {
+    return `${dmY[3]}-${dmY[2]}-${dmY[1]}`
+  }
+  const date = new Date(dateStr)
+  if (!Number.isNaN(date.getTime())) {
+    return date.toISOString().slice(0, 10)
+  }
+  return ''
+}
+
+export function formatDateDisplay(value) {
+  if (!value) return ''
+  const dateStr = String(value).trim()
+  if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
+    return dateStr
+  }
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr)
+  if (iso) {
+    return `${iso[3]}-${iso[2]}-${iso[1]}`
+  }
+  const date = new Date(dateStr)
+  if (!Number.isNaN(date.getTime())) {
+    return date.toLocaleDateString('en-GB').replace(/\//g, '-')
+  }
+  return dateStr
+}
+
 const units = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine']
 const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen']
 const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']

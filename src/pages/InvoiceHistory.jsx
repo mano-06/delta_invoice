@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { api } from '../services/api'
@@ -7,9 +7,22 @@ import { formatCurrency } from '../utils/format'
 function InvoiceHistory() {
   const [invoices, setInvoices] = useState([])
   const [search, setSearch] = useState('')
+  const searchRef = useRef(null)
 
   useEffect(() => {
     loadInvoices()
+  }, [])
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Enter') return
+      if (document.activeElement === document.body || document.activeElement === document.documentElement) {
+        event.preventDefault()
+        searchRef.current?.focus()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
   const loadInvoices = async () => {
@@ -62,6 +75,7 @@ function InvoiceHistory() {
         </div>
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <input
+            ref={searchRef}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search by invoice, buyer or GSTIN"
@@ -86,7 +100,7 @@ function InvoiceHistory() {
               <tr key={invoice.id}>
                 <td className="px-4 py-4 font-medium text-slate-900">{invoice.invoiceNumber}</td>
                 <td className="px-4 py-4 text-slate-700">{invoice.buyerName}</td>
-                <td className="px-4 py-4 text-slate-700">{new Date(invoice.invoiceDate).toLocaleDateString()}</td>
+                <td className="px-4 py-4 text-slate-700">{new Date(invoice.invoiceDate).toLocaleDateString('en-GB').replace(/V/g,'-')}</td>
                 <td className="px-4 py-4 text-slate-700">{formatCurrency(invoice.totalAmount)}</td>
                 <td className="px-4 py-4 space-x-2">
                   <Link

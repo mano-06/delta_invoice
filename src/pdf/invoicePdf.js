@@ -34,7 +34,7 @@ function getInvoicePrintStyles() {
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       background: #fff;
-      font-family: 'Jost', 'Futura PT', 'Futura', sans-serif;
+      font-family: 'Jost';
       font-size: 9px;
       color: #000;
       font-weight: 400;
@@ -42,7 +42,7 @@ function getInvoicePrintStyles() {
       letter-spacing: -0.015em;
     }
     .invoice-sheet {
-      font-family: 'Jost', 'Futura PT', 'Futura', sans-serif;
+      font-family: 'Jost';
       font-size: 9px;
       color: #000;
       font-weight: 400;

@@ -1,5 +1,8 @@
-  const { contextBridge, ipcRenderer } = require('electron')
+const { contextBridge, ipcRenderer } = require('electron')
 
+contextBridge.exposeInMainWorld('electronAPI', {
+  exitApp: () => ipcRenderer.send('exit-app'),
+})
 const invoke = (channel, payload) => ipcRenderer.invoke(channel, payload)
 const channels = [
   'app:getSettings',
