@@ -57,9 +57,9 @@ const getNextFallbackSequence = (store) => Number(store.sequence || 0) + 1
 
 const formatFallbackInvoiceNumber = (nextSequence) => {
   if (nextSequence <= 99) {
-    return `DD-${String(nextSequence).padStart(3, '0')}`
+    return `DD--${String(nextSequence).padStart(3, '0')}`
   }
-  return `DD-${nextSequence}`
+  return `DD--${nextSequence}`
 }
 
 const downloadJsonFile = (filename, payload) => {

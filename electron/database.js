@@ -345,12 +345,12 @@ function getNextInvoiceNumber() {
   if (nextSequence <= 99) {
     return {
       nextSequence,
-      invoiceNumber: `DD-${String(nextSequence).padStart(3, '0')}`
+      invoiceNumber: `DD--${String(nextSequence).padStart(3, '0')}`
     }
   }
   return {
     nextSequence,
-    invoiceNumber: `DD-${nextSequence}`
+    invoiceNumber: `DD--${nextSequence}`
   }
 }
 

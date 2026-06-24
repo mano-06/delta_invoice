@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { api } from '../services/api';
+import useBackspaceNavigation from '../hooks/useBackspaceNavigation';
 import useEnterNavigation from '../hooks/useEnterNavigation';
 import { blurActiveElement } from '../utils/focusManagement';
 
@@ -11,6 +12,7 @@ function Products() {
   const { register, handleSubmit, reset, setValue, setFocus, formState: { errors } } = useForm({ mode: 'onSubmit' });
   
   useEnterNavigation();
+  useBackspaceNavigation();
 
   const onInvalid = (formErrors) => {
     const firstInvalid = Object.keys(formErrors)[0]

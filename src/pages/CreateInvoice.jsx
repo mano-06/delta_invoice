@@ -6,6 +6,8 @@ import { AppContext } from '../context/AppContext'
 import { api } from '../services/api'
 import { downloadInvoicePdf, printInvoice } from '../pdf/invoicePdf'
 import { formatCurrency, toIndianCurrency, formatDateDisplay } from '../utils/format'
+import { blurActiveElement } from '../utils/focusManagement'
+import useBackspaceNavigation from '../hooks/useBackspaceNavigation'
 import useKeyboardShortcuts from '../hooks/useKeyboardShortcuts'
 
 const MAX_ITEMS = 20
@@ -41,6 +43,7 @@ function CreateInvoice() {
   
   // Initialize keyboard shortcuts with dropdown state
   useKeyboardShortcuts({ isDropdownOpen: activeDropdown !== null })
+  useBackspaceNavigation({ isDropdownOpen: activeDropdown !== null })
 
   const { register, control, handleSubmit, watch, setValue, reset } = useForm({
     defaultValues: {
@@ -277,6 +280,8 @@ function CreateInvoice() {
       const nextIndex = index + 1
       if (nextIndex < fields.length) {
         descriptionRefs.current[nextIndex]?.focus()
+      } else if (fields.length >= MAX_ITEMS && index === MAX_ITEMS - 1) {
+        handleSubmit(onSubmit)()
       } else {
         appendRow()
       }
@@ -528,6 +533,7 @@ function CreateInvoice() {
       return
     }
     toast.success('Invoice saved successfully')
+    blurActiveElement()
     navigate(`/preview/${response.id}`)
   }
 

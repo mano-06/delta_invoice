@@ -6,6 +6,8 @@ import { AppContext } from '../context/AppContext'
 import { api } from '../services/api'
 import { downloadInvoicePdf, printInvoice } from '../pdf/invoicePdf'
 import { formatCurrency, toIndianCurrency, formatDateDisplay, parseDateToIso } from '../utils/format'
+import { blurActiveElement } from '../utils/focusManagement'
+import useBackspaceNavigation from '../hooks/useBackspaceNavigation'
 
 const MAX_ITEMS = 20
 
@@ -34,7 +36,9 @@ function InvoicePreview() {
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [activeDropdown, setActiveDropdown] = useState(null)
+  const [dropdownSelectedIndex, setDropdownSelectedIndex] = useState(0)
   const dropdownContainerRef = useRef(null)
+  useBackspaceNavigation({ isDropdownOpen: activeDropdown !== null })
 
   useEffect(() => {
     loadCustomers()
@@ -61,6 +65,7 @@ function InvoicePreview() {
   const formValues = watch()
   const items = watch('items')
 
+  const customerSelectRef = useRef(null)
   const descriptionRefs = useRef([])
   const quantityRefs = useRef([])
   const rateRefs = useRef([])
@@ -100,7 +105,58 @@ function InvoicePreview() {
   }
 
   const handleDescriptionKeyDown = (event, index) => {
+    const currentItem = items?.[index] || {}
+    const filteredProducts = products
+      .filter((product) =>
+        product.name.toLowerCase().includes(currentItem.description?.toLowerCase() || '')
+      )
+      .slice(0, 5)
+
+    if (event.key === 'Escape') {
+      if (activeDropdown === index) {
+        event.preventDefault()
+        setActiveDropdown(null)
+        setDropdownSelectedIndex(0)
+        descriptionRefs.current[index]?.focus()
+      }
+      return
+    }
+
+    if (activeDropdown === index && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+      event.preventDefault()
+      if (filteredProducts.length === 0) return
+
+      if (event.key === 'ArrowDown') {
+        setDropdownSelectedIndex((prev) => (prev + 1) % filteredProducts.length)
+      } else {
+        setDropdownSelectedIndex((prev) => (prev - 1 + filteredProducts.length) % filteredProducts.length)
+      }
+      return
+    }
+
     if (event.key === 'Enter') {
+      if (event.shiftKey) {
+        event.preventDefault()
+        if (index > 0) {
+          rateRefs.current[index - 1]?.focus()
+        } else {
+          customerSelectRef.current?.focus()
+        }
+        return
+      }
+
+      if (activeDropdown === index && filteredProducts.length > 0) {
+        event.preventDefault()
+        const selectedProduct = filteredProducts[dropdownSelectedIndex]
+        handleItemDescriptionChange(index, selectedProduct.name)
+        setActiveDropdown(null)
+        setDropdownSelectedIndex(0)
+        window.setTimeout(() => {
+          quantityRefs.current[index]?.focus()
+        }, 0)
+        return
+      }
+
       event.preventDefault()
       quantityRefs.current[index]?.focus()
     }
@@ -109,6 +165,10 @@ function InvoicePreview() {
   const handleQuantityKeyDown = (event, index) => {
     if (event.key === 'Enter') {
       event.preventDefault()
+      if (event.shiftKey) {
+        descriptionRefs.current[index]?.focus()
+        return
+      }
       rateRefs.current[index]?.focus()
     }
   }
@@ -123,6 +183,10 @@ function InvoicePreview() {
   const handleRateKeyDown = (event, index) => {
     if (event.key === 'Enter') {
       event.preventDefault()
+      if (event.shiftKey) {
+        quantityRefs.current[index]?.focus()
+        return
+      }
       const status = getRowStatus(index)
       if (status.isIncomplete) return
       if (status.isEmpty) {
@@ -136,6 +200,8 @@ function InvoicePreview() {
       const nextIndex = index + 1
       if (nextIndex < fields.length) {
         descriptionRefs.current[nextIndex]?.focus()
+      } else if (fields.length >= MAX_ITEMS && index === MAX_ITEMS - 1) {
+        handleSubmit(onSave)()
       } else {
         appendRow()
       }
@@ -391,6 +457,7 @@ function InvoicePreview() {
       setInvoice(response)
       setIsEditing(false)
       toast.success('Invoice updated')
+      blurActiveElement()
     } finally {
       setIsSaving(false)
     }
@@ -491,6 +558,7 @@ function InvoicePreview() {
                 <label className="text-sm font-medium text-slate-700 md:col-span-2">
                   Select Customer
                   <select
+                    ref={customerSelectRef}
                     onChange={(event) => handleCustomerSelect(event.target.value)}
                     className="mt-1 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
                   >
@@ -559,8 +627,12 @@ function InvoicePreview() {
                                 onChange={(event) => {
                                   handleItemDescriptionChange(index, event.target.value)
                                   setActiveDropdown(index)
+                                  setDropdownSelectedIndex(0)
                                 }}
-                                onFocus={() => setActiveDropdown(index)}
+                                onFocus={() => {
+                                  setActiveDropdown(index)
+                                  setDropdownSelectedIndex(0)
+                                }}
                                 onBlur={() => setTimeout(() => setActiveDropdown(null), 200)}
                                 ref={(element) => { descriptionRefs.current[index] = element }}
                                 onKeyDown={(event) => handleDescriptionKeyDown(event, index)}
@@ -658,22 +730,27 @@ function InvoicePreview() {
                       if (filteredProducts.length === 0) return null
                       return (
                         <div className="max-h-40 overflow-y-auto">
-                          {filteredProducts.map((product) => (
-                            <div
-                              key={product.id}
-                              className="px-3 py-2 cursor-pointer hover:bg-gray-100 text-sm text-slate-900"
-                              onMouseDown={() => {
-                                const selectedIndex = activeDropdown
-                                handleItemDescriptionChange(selectedIndex, product.name)
-                                setActiveDropdown(null)
-                                window.setTimeout(() => {
-                                  quantityRefs.current[selectedIndex]?.focus()
-                                }, 0)
-                              }}
-                            >
-                              {product.name}
-                            </div>
-                          ))}
+                          {filteredProducts.map((product, idx) => {
+                            const selected = idx === dropdownSelectedIndex
+                            return (
+                              <div
+                                key={product.id}
+                                className={`px-3 py-2 cursor-pointer text-sm text-slate-900 ${selected ? 'bg-slate-100' : 'hover:bg-gray-100'}`}
+                                onMouseDown={() => {
+                                  const selectedIndex = activeDropdown
+                                  handleItemDescriptionChange(selectedIndex, product.name)
+                                  setActiveDropdown(null)
+                                  setDropdownSelectedIndex(0)
+                                  window.setTimeout(() => {
+                                    quantityRefs.current[selectedIndex]?.focus()
+                                  }, 0)
+                                }}
+                                onMouseEnter={() => setDropdownSelectedIndex(idx)}
+                              >
+                                {product.name}
+                              </div>
+                            )
+                          })}
                         </div>
                       )
                     })()}
@@ -712,12 +789,13 @@ function InvoicePreview() {
             fontFamily: 'Jost',
             fontSize: '9px',
             color: '#000',
-            fontWeight: '400',
+            fontWeight: '500',
+            fontSynthesis: 'none',
             letterSpacing: '-0.015em',
             width: '210mm',
-            minHeight: '297mm',
+            minHeight: '257mm',
             margin: '0 auto',
-            padding: '4mm 6mm',
+            padding: '0mm 6mm',
             boxSizing: 'border-box',
             backgroundColor: '#fff',
           }}
@@ -761,8 +839,8 @@ function InvoicePreview() {
                 <div style={{ padding: '8px 6px', fontWeight: 'bold', fontSize: '13px' }}>DATED</div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '44.5% 55.5%' }}>
-                <div style={{ padding: '8px 6px', fontSize: '13px', borderRight: '1px solid #000', fontWeight: '400' }}>{formValues.invoiceNumber}</div>
-                <div style={{ padding: '8px 6px', fontSize: '13px', fontWeight: '400' }}>{displayInvoiceDate}</div>
+                <div style={{ padding: '8px 6px', fontSize: '13px', borderRight: '1px solid #000', fontWeight: '500' }}>{formValues.invoiceNumber}</div>
+                <div style={{ padding: '8px 6px', fontSize: '13px', fontWeight: '500' }}>{displayInvoiceDate}</div>
               </div>
             </div>
           </div>
@@ -787,18 +865,18 @@ function InvoicePreview() {
                 </thead>
                 <tbody>
                   <tr>
-                    <td colSpan={6} style={{ padding: 0, height: '400px', verticalAlign: 'top', border: 0, position: 'relative', lineHeight: '1' }}>
+                    <td colSpan={6} style={{ padding: 0, height: '396px', verticalAlign: 'top', border: 0, position: 'relative', lineHeight: '1' }}>
                       <table style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                         {colGroup}
                         <tbody>
-                          <tr style={{ height: '400px' }}>
+                          <tr style={{ height: '396px' }}>
                             {cols.map((_, i) => (
                               <td key={i} style={{ borderRight: cellBorder(i), padding: 0 }}></td>
                             ))}
                           </tr>
                         </tbody>
                       </table>
-                      <div style={{ position: 'relative', overflow: 'hidden', height: '400px' }}>
+                      <div style={{ position: 'relative', overflow: 'hidden', height: '396px' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           {colGroup}
                           <tbody>
@@ -815,7 +893,7 @@ function InvoicePreview() {
                               return (
                                 <tr key={index}>
                                   {cells.map((cell, ci) => (
-                                    <td key={ci} style={{ padding: '3px 5px', fontSize: '13px', fontWeight: '400', textAlign: cell.align, verticalAlign: 'top', whiteSpace: 'normal', overflowWrap: 'break-word', wordBreak: 'break-word' }}>{cell.val}</td>
+                                    <td key={ci} style={{ padding: '3px 5px', fontSize: '13px', fontWeight: '500', textAlign: cell.align, verticalAlign: 'top', whiteSpace: 'normal', overflowWrap: 'break-word', wordBreak: 'break-word' }}>{cell.val}</td>
                                   ))}
                                 </tr>
                               )
@@ -827,27 +905,27 @@ function InvoicePreview() {
                   </tr>
 
                   <tr style={{ borderTop: '1px solid #000' }}>
-                    <td colSpan={5} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '400', fontSize: '13px' }}></td>
-                    <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '400', fontSize: '13px', borderLeft: '1px solid #000' }}>
+                    <td colSpan={5} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '500', fontSize: '13px' }}></td>
+                    <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '500', fontSize: '13px', borderLeft: '1px solid #000' }}>
                       {Number(totals.taxableValue).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                   </tr>
                   <tr>
-                    <td colSpan={5} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '400', fontSize: '13px' }}>CGST 2.5%</td>
-                    <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '400', fontSize: '13px', borderLeft: '1px solid #000' }}>
+                    <td colSpan={5} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '500', fontSize: '13px' }}>CGST 2.5%</td>
+                    <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '500', fontSize: '13px', borderLeft: '1px solid #000' }}>
                       {Number(totals.cgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                   </tr>
                   <tr>
-                    <td colSpan={5} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '400', fontSize: '13px' }}>SGST 2.5%</td>
-                    <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '400', fontSize: '13px', borderLeft: '1px solid #000' }}>
+                    <td colSpan={5} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '500', fontSize: '13px' }}>SGST 2.5%</td>
+                    <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '500', fontSize: '13px', borderLeft: '1px solid #000' }}>
                       {Number(totals.sgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                   </tr>
                   {totals.roundOff !== 0 && (
                     <tr>
-                      <td colSpan={5} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '400', fontSize: '13px' }}>ROUND OFF</td>
-                      <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '400', fontSize: '13px', borderLeft: '1px solid #000' }}>
+                      <td colSpan={5} style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '500', fontSize: '13px' }}>ROUND OFF</td>
+                      <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '500', fontSize: '13px', borderLeft: '1px solid #000' }}>
                         {totals.roundOff < 0 ? '(-)' : '(+)'}{Math.abs(totals.roundOff).toFixed(2)}
                       </td>
                     </tr>
@@ -867,7 +945,7 @@ function InvoicePreview() {
                     <td colSpan={7} style={{ padding: '4px 8px', lineHeight: '1' }}>
                       <span style={{ fontWeight: 'bold', fontSize: '13px' }}>Amount Chargeable (in words)</span>
                       <span style={{ float: 'right', fontSize: '13px' }}>E. &amp; O.E</span>
-                      <div style={{ marginTop: '3px', fontWeight: '400', fontSize: '13px' }}>{toIndianCurrency(totals.finalAmount)}</div>
+                      <div style={{ marginTop: '3px', fontWeight: '500', fontSize: '13px' }}>{toIndianCurrency(totals.finalAmount)}</div>
                     </td>
                   </tr>
 
@@ -906,25 +984,25 @@ function InvoicePreview() {
                               const sgst = Number((taxable * 0.025).toFixed(2))
                               return (
                                 <tr key={hsn} style={{ borderBottom: '1px solid #000' }}>
-                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '400', textAlign: 'left', borderRight: '1px solid #000' }}>{hsn}</td>
-                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '400', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(taxable).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '400', textAlign: 'right', borderRight: '1px solid #000' }}>2.50%</td>
-                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '400', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(cgst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '400', textAlign: 'right', borderRight: '1px solid #000' }}>2.50%</td>
-                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '400', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(sgst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '400', textAlign: 'right' }}>{Number(cgst + sgst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '500', textAlign: 'left', borderRight: '1px solid #000' }}>{hsn}</td>
+                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '500', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(taxable).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '500', textAlign: 'right', borderRight: '1px solid #000' }}>2.50%</td>
+                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '500', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(cgst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '500', textAlign: 'right', borderRight: '1px solid #000' }}>2.50%</td>
+                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '500', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(sgst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                  <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '500', textAlign: 'right' }}>{Number(cgst + sgst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                 </tr>
                               )
                             })
                           })()}
                           <tr style={{ borderTop: '1px solid #000' }}>
-                            <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '400', textAlign: 'left', borderRight: '1px solid #000' }}>Total</td>
-                            <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '400', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(totals.taxableValue).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '500', textAlign: 'left', borderRight: '1px solid #000' }}>Total</td>
+                            <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '500', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(totals.taxableValue).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                             <td style={{ padding: '2px 5px', borderRight: '1px solid #000' }}></td>
-                            <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '400', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(totals.cgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '500', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(totals.cgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                             <td style={{ padding: '2px 5px', borderRight: '1px solid #000' }}></td>
-                            <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '400', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(totals.sgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '400', textAlign: 'right' }}>{Number(totals.cgstAmount + totals.sgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '500', textAlign: 'right', borderRight: '1px solid #000' }}>{Number(totals.sgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td style={{ padding: '2px 5px', fontSize: '12px', fontWeight: '500', textAlign: 'right' }}>{Number(totals.cgstAmount + totals.sgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                           </tr>
                         </tbody>
                       </table>
@@ -932,7 +1010,7 @@ function InvoicePreview() {
                   </tr>
 
                   <tr style={{ borderTop: '1px solid #000' }}>
-                    <td colSpan={7} style={{ padding: '3px 8px', fontSize: '13px', fontWeight: '400' }}>
+                    <td colSpan={7} style={{ padding: '3px 8px', fontSize: '13px', fontWeight: '500' }}>
                       <strong>Tax Amount (in words) :</strong> {toIndianCurrency(totals.cgstAmount + totals.sgstAmount)}
                     </td>
                   </tr>
@@ -945,15 +1023,15 @@ function InvoicePreview() {
                           <div style={{ fontSize: '13px', lineHeight: '1.5' }}>
                             <div style={{ display: 'flex' }}>
                               <span style={{ width: '80px', fontWeight: 'bold' }}>Bank Name</span>
-                              <span style={{ fontWeight: '400' }}>: {settings?.bankName || ''}</span>
+                              <span style={{ fontWeight: '500' }}>: {settings?.bankName || ''}</span>
                             </div>
                             <div style={{ display: 'flex' }}>
                               <span style={{ width: '80px', fontWeight: 'bold' }}>A/c No.</span>
-                              <span style={{ fontWeight: '400' }}>: {settings?.accountNumber || ''}</span>
+                              <span style={{ fontWeight: '500' }}>: {settings?.accountNumber || ''}</span>
                             </div>
                             <div style={{ display: 'flex' }}>
                               <span style={{ width: '80px', fontWeight: 'bold' }}>IFS Code</span>
-                              <span style={{ fontWeight: '400' }}>: {settings?.branchIfsc || ''}</span>
+                              <span style={{ fontWeight: '500' }}>: {settings?.branchIfsc || ''}</span>
                             </div>
                           </div>
                         </div>
@@ -969,9 +1047,9 @@ function InvoicePreview() {
             )
           })()}
 
-          <div style={{ padding: '2px 5px', textAlign: 'center' }}>
+          <div style={{ padding: '2px 5px 4px', textAlign: 'center', marginTop: '2px' }}>
             <div style={{ textTransform: 'uppercase', fontSize: '13px', fontWeight: 'bold' }}>SUBJECT TO TIRUPPUR JURISDICTION</div>
-            <div style={{ marginTop: '2px', fontSize: '12px', fontWeight: '400' }}>This is a Computer Generated Invoice</div>
+            <div style={{ marginTop: '2px', fontSize: '13px', fontWeight: '500' }}>This is a Computer Generated Invoice</div>
           </div>
         </div>
       </section>

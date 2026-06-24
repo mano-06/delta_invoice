@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import useEnterNavigation from '../hooks/useEnterNavigation';
+import useBackspaceNavigation from '../hooks/useBackspaceNavigation';
 import { useForm } from 'react-hook-form'
 import toast from 'react-hot-toast'
 import { api } from '../services/api'
@@ -17,6 +18,7 @@ const joinBillingAddress = (line1 = '', line2 = '') => [line1.trim(), line2.trim
 
 function Customers() {
   useEnterNavigation();
+  useBackspaceNavigation();
   const [customers, setCustomers] = useState([])
   const [editing, setEditing] = useState(null)
   const { register, handleSubmit, reset, setValue, watch, setFocus, formState: { errors } } = useForm({ mode: 'onSubmit' })

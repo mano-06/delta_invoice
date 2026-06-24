@@ -2,6 +2,7 @@ import { useContext, useEffect, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import toast from 'react-hot-toast'
 import { AppContext } from '../context/AppContext'
+import useBackspaceNavigation from '../hooks/useBackspaceNavigation'
 import useEnterNavigation from '../hooks/useEnterNavigation'
 import { blurActiveElement } from '../utils/focusManagement'
 
@@ -11,6 +12,7 @@ function Settings() {
   const logoInputRef = useRef(null)
   
   useEnterNavigation()
+  useBackspaceNavigation()
 
   useEffect(() => {
     if (settings) {
