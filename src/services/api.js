@@ -1,3 +1,5 @@
+import { isInvoiceInMonth } from '../utils/format'
+
 const FALLBACK_STORAGE_KEY = 'delta-invoice-fallback-store'
 const FALLBACK_BACKUP_KEY = 'delta-invoice-fallback-backup'
 
@@ -212,6 +214,23 @@ const fallbackInvoke = async (channel, payload) => {
       }
     }
 
+    case 'app:getMonthlyRevenue': {
+      const now = new Date()
+      const targetYear = payload?.year ? Number(payload.year) : now.getFullYear()
+      const targetMonth = payload?.month ? Number(payload.month) : now.getMonth() + 1
+
+      const matchingInvoices = store.invoices.filter((invoice) => {
+        return isInvoiceInMonth(invoice.invoiceDate, targetYear, targetMonth)
+      })
+
+      const totalRevenue = matchingInvoices.reduce((sum, inv) => sum + Number(inv.totalAmount || 0), 0)
+      return {
+        totalRevenue: Number(totalRevenue.toFixed(2)),
+        year: targetYear,
+        month: targetMonth,
+      }
+    }
+
     case 'app:exportDatabase': {
       downloadJsonFile('delta-invoice-backup.json', store)
       return { success: true, path: 'delta-invoice-backup.json' }
@@ -271,6 +290,7 @@ export const api = {
   saveInvoice: (payload) => invoke('app:saveInvoice', payload),
   deleteInvoice: (id) => invoke('app:deleteInvoice', id),
   getNextInvoiceNumber: () => invoke('app:getNextInvoiceNumber'),
+  getMonthlyRevenue: (payload) => invoke('app:getMonthlyRevenue', payload),
   exportDatabase: () => invoke('app:exportDatabase'),
   importDatabase: () => invoke('app:importDatabase'),
   backupJson: () => invoke('app:backupJson'),

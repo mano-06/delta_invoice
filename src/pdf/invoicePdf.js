@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 
-const COPY_LABELS = ['(ORIGINAL FOR SUPPLIER)', '(DUPLICATE FOR RECIPIENT)', '(TRIPLICATE FOR SUPPLIER)', '(EXTRA COPY)']
+const COPY_LABELS = ['(EXTRA COPY)', '(DUPLICATE FOR RECIPIENT)', '(ORIGINAL FOR SUPPLIER)']
 
 const settingsDefaults = {
   companyName: '',
@@ -134,7 +134,7 @@ function buildInvoiceBody(payload, copyLabel = '') {
     `
   }).join('')
 
-  const roundOffRow =  `
+  const roundOffRow = `
     <tr>
       <td colspan="5" style="padding:2px 5px;text-align:right;font-weight:400;font-size:13px;">ROUND OFF</td>
       <td style="padding:2px 5px;text-align:right;font-weight:400;font-size:13px;border-left:1px solid #000;">
@@ -164,9 +164,9 @@ function buildInvoiceBody(payload, copyLabel = '') {
       <div style="display:flex;border:1px solid #000;border-bottom:0;align-items:stretch;min-height:60px;">
         <div style="flex:1;width:72px;min-width:72px;padding:4px;display:flex;align-items:center;justify-content:left;">
           ${settings.companyLogo
-            ? `<img src="${settings.companyLogo}" alt="Logo" style="max-width:225px;max-height:180px;object-fit:contain;margin:15px 15px 15px 15px;" />`
-            : `<div style="width:60px;height:60px;border:1px dashed #ccc;display:flex;align-items:center;justify-content:center;font-size:8px;color:#aaa;text-align:center;">LOGO</div>`
-          }
+      ? `<img src="${settings.companyLogo}" alt="Logo" style="max-width:225px;max-height:180px;object-fit:contain;margin:15px 15px 15px 15px;" />`
+      : `<div style="width:60px;height:60px;border:1px dashed #ccc;display:flex;align-items:center;justify-content:center;font-size:8px;color:#aaa;text-align:center;">LOGO</div>`
+    }
         </div>
         <div style="width:38%;padding:10px 10px 4px;text-align:left;font-size:13px;line-height:1.4;">
           ${settings.address1 ? `<div>${escapeHtml(settings.address1)}</div>` : ''}

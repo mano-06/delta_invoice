@@ -1,14 +1,15 @@
 import { useContext, useEffect, useRef, useState } from 'react'
-import { useFieldArray, useForm } from 'react-hook-form'
+import { useFieldArray, useForm, Controller } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { AppContext } from '../context/AppContext'
 import { api } from '../services/api'
 import { downloadInvoicePdf, printInvoice } from '../pdf/invoicePdf'
-import { formatCurrency, toIndianCurrency, formatDateDisplay } from '../utils/format'
+import { formatCurrency, toIndianCurrency, formatDateDisplay, capitalizeDescription } from '../utils/format'
 import { blurActiveElement } from '../utils/focusManagement'
 import useBackspaceNavigation from '../hooks/useBackspaceNavigation'
 import useKeyboardShortcuts from '../hooks/useKeyboardShortcuts'
+import CustomDatePicker from '../components/CustomDatePicker'
 
 const MAX_ITEMS = 20
 
@@ -380,9 +381,10 @@ function CreateInvoice() {
   }
 
   const handleItemDescriptionChange = (index, value) => {
-    setValue(`items.${index}.description`, value)
+    const formattedValue = capitalizeDescription(value)
+    setValue(`items.${index}.description`, formattedValue)
 
-    const product = findProductByName(value)
+    const product = findProductByName(formattedValue)
     if (product) {
       setValue(`items.${index}.productId`, product.id)
       setValue(`items.${index}.hsn`, product.hsn || settings?.hsnSac || '')
@@ -593,7 +595,17 @@ function CreateInvoice() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700">Dated</label>
-                <input type="date" {...register('invoiceDate')} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
+                <Controller
+                  control={control}
+                  name="invoiceDate"
+                  render={({ field }) => (
+                    <CustomDatePicker 
+                      value={field.value} 
+                      onChange={field.onChange} 
+                      className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus-within:border-slate-900 bg-white" 
+                    />
+                  )}
+                />
               </div>
             </div>
           </div>

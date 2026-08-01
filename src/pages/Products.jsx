@@ -5,6 +5,7 @@ import { api } from '../services/api';
 import useBackspaceNavigation from '../hooks/useBackspaceNavigation';
 import useEnterNavigation from '../hooks/useEnterNavigation';
 import { blurActiveElement } from '../utils/focusManagement';
+import { capitalizeDescription } from '../utils/format';
 
 function Products() {
   const [products, setProducts] = useState([]);
@@ -56,6 +57,7 @@ function Products() {
   const onSubmit = async (data) => {
     const payload = {
       ...data,
+      name: capitalizeDescription(data.name),
       id: editing?.id,
       rate: Number(data.rate || 0),
       hsn: '',

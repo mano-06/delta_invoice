@@ -18,6 +18,7 @@ const channels = [
   'app:saveInvoice',
   'app:deleteInvoice',
   'app:getNextInvoiceNumber',
+  'app:getMonthlyRevenue',
   'app:exportDatabase',
   'app:importDatabase',
   'app:backupJson',

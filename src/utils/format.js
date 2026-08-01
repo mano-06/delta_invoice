@@ -7,6 +7,47 @@ export function formatCurrency(value) {
   }).format(number)
 }
 
+export function capitalizeDescription(value) {
+  if (!value) return ''
+  return String(value).replace(/(?:^|[^a-zA-Z])([a-z])/g, (match, letter) => {
+    return match.slice(0, -1) + letter.toUpperCase()
+  })
+}
+
+export function isInvoiceInMonth(invoiceDateStr, targetYear, targetMonth) {
+  if (!invoiceDateStr) return false
+  const str = String(invoiceDateStr).trim()
+  if (!str) return false
+
+  const targetY = Number(targetYear)
+  const targetM = Number(targetMonth)
+
+  // 1. YYYY-MM-DD or YYYY/MM/DD
+  const yyyyFirst = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/.exec(str)
+  if (yyyyFirst) {
+    const y = parseInt(yyyyFirst[1], 10)
+    const m = parseInt(yyyyFirst[2], 10)
+    return y === targetY && m === targetM
+  }
+
+  // 2. DD-MM-YYYY or DD/MM/YYYY
+  const ddFirst = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/.exec(str)
+  if (ddFirst) {
+    const y = parseInt(ddFirst[3], 10)
+    const m = parseInt(ddFirst[2], 10)
+    return y === targetY && m === targetM
+  }
+
+  // 3. Try standard Date object
+  const d = new Date(str)
+  if (!isNaN(d.getTime())) {
+    return d.getFullYear() === targetY && (d.getMonth() + 1) === targetM
+  }
+
+  return false
+}
+
+
 export function parseDateToIso(value) {
   if (!value) return ''
   const dateStr = String(value).trim()

@@ -31,6 +31,7 @@ const {
   saveInvoice,
   deleteInvoice,
   getNextInvoiceNumber,
+  getMonthlyRevenue,
   exportDatabase: exportDatabaseFile,
   importDatabase: importDatabaseFile,
   exportJson,
@@ -142,6 +143,7 @@ const db = {
   saveInvoice: (invoice) => saveInvoice(invoice),
   deleteInvoice: (id) => deleteInvoice(id),
   getNextInvoiceNumber: () => getNextInvoiceNumber(),
+  getMonthlyRevenue: (payload) => getMonthlyRevenue(payload),
   exportDatabase: async () => {
     const result = await dialog.showSaveDialog({
       title: 'Export Database',

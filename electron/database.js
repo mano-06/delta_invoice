@@ -332,6 +332,85 @@ function getInvoices(filter = {}) {
   return db.prepare(query).all()
 }
 
+function isInvoiceInMonth(invoiceDateStr, targetYear, targetMonth) {
+  if (!invoiceDateStr) return false
+  const str = String(invoiceDateStr).trim()
+  if (!str) return false
+
+  const targetY = Number(targetYear)
+  const targetM = Number(targetMonth)
+
+  const yyyyFirst = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/.exec(str)
+  if (yyyyFirst) {
+    const y = parseInt(yyyyFirst[1], 10)
+    const m = parseInt(yyyyFirst[2], 10)
+    return y === targetY && m === targetM
+  }
+
+  const ddFirst = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/.exec(str)
+  if (ddFirst) {
+    const y = parseInt(ddFirst[3], 10)
+    const m = parseInt(ddFirst[2], 10)
+    return y === targetY && m === targetM
+  }
+
+  const d = new Date(str)
+  if (!isNaN(d.getTime())) {
+    return d.getFullYear() === targetY && (d.getMonth() + 1) === targetM
+  }
+
+  return false
+}
+
+function getMonthlyRevenue(payload = {}) {
+  const now = new Date()
+  const targetYear = payload.year ? Number(payload.year) : now.getFullYear()
+  const targetMonth = payload.month ? Number(payload.month) : now.getMonth() + 1
+
+  const monthStr = String(targetMonth).padStart(2, '0')
+  const yearStr = String(targetYear)
+
+  const rows = db.prepare(`
+    SELECT totalAmount, invoiceDate
+    FROM invoices
+    WHERE invoiceDate LIKE ?
+       OR invoiceDate LIKE ?
+       OR invoiceDate LIKE ?
+       OR invoiceDate LIKE ?
+       OR (strftime('%Y', invoiceDate) = ? AND strftime('%m', invoiceDate) = ?)
+  `).all(
+    `${yearStr}-${monthStr}%`,
+    `${yearStr}/${monthStr}%`,
+    `%-${monthStr}-${yearStr}`,
+    `%/${monthStr}/${yearStr}`,
+    yearStr,
+    monthStr
+  )
+
+  let totalRevenue = 0
+  for (const row of rows) {
+    if (isInvoiceInMonth(row.invoiceDate, targetYear, targetMonth)) {
+      totalRevenue += Number(row.totalAmount || 0)
+    }
+  }
+
+  // Fallback: If filtered SQL returned nothing, check all invoices in case of unexpected date formats
+  if (rows.length === 0) {
+    const allRows = db.prepare('SELECT totalAmount, invoiceDate FROM invoices').all()
+    for (const row of allRows) {
+      if (isInvoiceInMonth(row.invoiceDate, targetYear, targetMonth)) {
+        totalRevenue += Number(row.totalAmount || 0)
+      }
+    }
+  }
+
+  return {
+    totalRevenue: Number(totalRevenue.toFixed(2)),
+    year: targetYear,
+    month: targetMonth,
+  }
+}
+
 function getInvoiceById(id) {
   const invoice = db.prepare('SELECT * FROM invoices WHERE id = ?').get(id)
   if (!invoice) return null
@@ -550,6 +629,7 @@ module.exports = {
   saveInvoice,
   deleteInvoice,
   getNextInvoiceNumber,
+  getMonthlyRevenue,
   exportDatabase,
   importDatabase,
   exportJson,
