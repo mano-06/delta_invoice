@@ -100,7 +100,7 @@ function InvoiceHistory() {
               <tr key={invoice.id}>
                 <td className="px-4 py-4 font-medium text-slate-900">{invoice.invoiceNumber}</td>
                 <td className="px-4 py-4 text-slate-700">{invoice.buyerName}</td>
-                <td className="px-4 py-4 text-slate-700">{new Date(invoice.invoiceDate).toLocaleDateString('en-GB').replace(/V/g,'-')}</td>
+                <td className="px-4 py-4 text-slate-700">{new Date(invoice.invoiceDate).toLocaleDateString('en-GB').replace(/V/g, '-')}</td>
                 <td className="px-4 py-4 text-slate-700">{formatCurrency(invoice.totalAmount)}</td>
                 <td className="px-4 py-4 space-x-2">
                   <Link
